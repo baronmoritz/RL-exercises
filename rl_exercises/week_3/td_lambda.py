@@ -60,10 +60,10 @@ class TDLambda(AbstractAgent):
         self.policy = policy
 
     def predict_action(
-        self, state: np.array, info: dict = {}, evaluate: bool = False
+        self, state: np.ndarray, info: dict = {}, evaluate: bool = False
     ) -> Any:  # type: ignore # noqa
         """Predict the action for a given state"""
-        raise NotImplementedError
+        return self.policy(self.Q, state, evaluate=evaluate), info
 
     def save(self, path: str) -> Any:  # type: ignore
         """Save the Q table
@@ -74,7 +74,7 @@ class TDLambda(AbstractAgent):
             Path to save the Q table
 
         """
-        # np.save(path, dict(self.Q))  # type: ignore
+        np.save(path, dict(self.Q))  # type: ignore
 
     def load(self, path) -> Any:  # type: ignore
         """Load the Q table
@@ -85,11 +85,11 @@ class TDLambda(AbstractAgent):
             Path to saved the Q table
 
         """
-        # loaded_q = np.load(path, allow_pickle=True).item()
-        # self.Q = defaultdict(
-        #     lambda: np.zeros(self.n_actions, dtype=float),
-        #     loaded_q,
-        # )
+        loaded_q = np.load(path, allow_pickle=True).item()
+        self.Q = defaultdict(
+            lambda: np.zeros(self.n_actions, dtype=float),
+            loaded_q,
+        )
 
     def update_agent(self, batch) -> float:  # type: ignore
         """Unpack a batch from SimpleBuffer and route to the appropriate TD update.

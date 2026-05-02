@@ -60,7 +60,7 @@ class TDAgent(AbstractAgent):
         self.policy = policy
 
     def predict_action(
-        self, state: np.array, info: dict = {}, evaluate: bool = False
+        self, state: np.ndarray, info: dict = {}, evaluate: bool = False
     ) -> Any:  # type: ignore # noqa
         """Predict the action for a given state"""
         return self.policy(self.Q, state, evaluate=evaluate), info
