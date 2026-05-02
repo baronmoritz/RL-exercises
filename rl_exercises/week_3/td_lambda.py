@@ -9,7 +9,7 @@ from rl_exercises.agent import AbstractAgent
 State = Any
 
 
-class TDLambda(AbstractAgent):
+class TDLambdaAgent(AbstractAgent):
     """TDLambda agent"""
 
     def __init__(
