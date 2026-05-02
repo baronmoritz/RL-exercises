@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, DefaultDict
-
-from collections import defaultdict
+from typing import Any
 
 import gymnasium as gym
 import numpy as np
 from rl_exercises.agent import AbstractAgent
-from rl_exercises.week_3 import EpsilonGreedyPolicy
 
 State = Any
 
@@ -18,10 +15,10 @@ class TDLambda(AbstractAgent):
     def __init__(
         self,
         env: gym.Env,
-        policy: EpsilonGreedyPolicy,
         alpha: float = 0.5,  # Learning rate
         gamma: float = 1.0,  # Discount factor
-        lamd: float = 0.5,  # Trace decay
+        lambd: float = 0.5,  # Trace decay
+        initial_value: float = 0.5,  # Initial value to init V as described in the paper on page 22 (PDF page 14)
     ) -> None:
         """Initialize the TD agent
 
@@ -35,64 +32,69 @@ class TDLambda(AbstractAgent):
             Discount Factor , by default 1.0
         lamd : float, optional
             Trace decay, by default 0.5
+        initial_value : float, optional
+            Initial value to initialize the weights, by default 0.5
         """
         # Check hyperparameter boundaries
         assert 0 <= gamma <= 1, "Gamma should be in [0, 1]"
         assert alpha > 0, "Learning rate has to be greater than 0"
-        assert 0 <= lamd <= 1, "Lamda should be in [0, 1]"
+        assert 0 <= lambd <= 1, "Lamda should be in [0, 1]"
+        assert 0 <= initial_value <= 1, "Initial value should be in [0, 1]"
 
         self.env = env
         self.gamma = gamma
         self.alpha = alpha
-        self.lambd = lamd
+        self.lambd = lambd
+        self.initial_value = initial_value
 
-        # number of actions → used by Q’s default factory
-        self.n_actions = env.action_space.n
+        # number of states → used by V’s default factory
+        self.n_states = env.observation_space.n
 
-        # Build Q so that unseen states map to zero‐vectors
-        self.Q: DefaultDict[Any, np.ndarray] = defaultdict(
-            lambda: np.zeros(self.n_actions, dtype=float)
-        )
+        # Build V and initialize it with the initial_value
+        self.V = np.full(self.n_states, self.initial_value, dtype=float)
 
         # Eligibility traces as on page 16 of the paper (PDF page 8)
-        self.e = defaultdict(lambda: np.zeros(self.n_actions))
+        self.e_traces = np.zeros(self.n_states, dtype=float)
 
-        self.policy = policy
+        # For environments with terminal states (like RandomWalk)
+        if hasattr(env, "terminal_states"):
+            for state in env.terminal_states:
+                self.V[state] = 0.0  # Terminal states have the value 0
 
     def predict_action(
         self, state: np.ndarray, info: dict = {}, evaluate: bool = False
     ) -> Any:  # type: ignore # noqa
-        """Predict the action for a given state"""
-        return self.policy(self.Q, state, evaluate=evaluate), info
+        """Predict the action for a given state.
+        However, in this scenario we do not predict actions.
+        Therefore, we just return 0 here and this is just for completeness.
+        """
+        return 0, info
 
     def save(self, path: str) -> Any:  # type: ignore
-        """Save the Q table
+        """Save the value table V.
 
         Parameters
         ----------
         path :
-            Path to save the Q table
+            Path to save the value table V
 
         """
-        np.save(path, dict(self.Q))  # type: ignore
+        np.save(path, self.V)  # type: ignore
 
     def load(self, path) -> Any:  # type: ignore
-        """Load the Q table
+        """Load the value table V and reset the eligibility traces.
 
         Parameters
         ----------
         path :
-            Path to saved the Q table
+            Path to saved the value table V
 
         """
-        loaded_q = np.load(path, allow_pickle=True).item()
-        self.Q = defaultdict(
-            lambda: np.zeros(self.n_actions, dtype=float),
-            loaded_q,
-        )
+        self.V = np.load(path, allow_pickle=True).item()
+        self.e_traces = np.zeros(self.n_states, dtype=float)
 
-    def update_agent(self, batch) -> float:  # type: ignore
-        """Unpack a batch from SimpleBuffer and route to the appropriate TD update.
+    def update_agent(self, batch: list) -> float:  # type: ignore
+        """Unpack a batch from SimpleBuffer and then update the agent.
 
         Parameters
         ----------
@@ -102,15 +104,32 @@ class TDLambda(AbstractAgent):
         Returns
         -------
         float
-            New Q value for the state action pair
+            New value V(s) for the state
         """
-        state, action, reward, next_state, done, _ = batch[0]
-        # if self.algorithm == "sarsa":
-        #     # TODO: Get the next action for the lookahead in SARSA using the policy of this agent.
 
-        #     next_action = self.policy(
-        #         self.Q, next_state, evaluate=False
-        #     )  # Use the policy to select the next action
-        #     return self.SARSA(state, action, reward, next_state, next_action, done)
-        # else:
-        #     return self.Q_Learning(state, action, reward, next_state, done)
+        state, _action, reward, next_state, done, _ = batch[0]
+
+        # Convert to the correct type (if not already)
+        state = int(state)
+        next_state = int(next_state)
+        reward = float(reward)
+
+        # Now we update the value according to formula (4)
+        # in the paper on page 15 (PDF page 7)
+        # For terminal states, V(next_state) = 0
+        next_V = 0.0 if done else self.V[next_state]
+        delta = reward + self.gamma * next_V - self.V[state]
+
+        # Update eligibility traces (accumulating traces) as described
+        # in the paper on page 16 (PDF page 8)
+        self.e_traces *= self.gamma * self.lambd
+        self.e_traces[state] += 1.0
+
+        # Update all state values
+        self.V += self.alpha * delta * self.e_traces
+
+        # Reset eligibility traces at the end of episode
+        if done:
+            self.e_traces.fill(0.0)
+
+        return float(self.V[state])
