@@ -204,7 +204,7 @@ def plot_figure_4(lambda_values, rms_errors_repeated, alpha_values):
     plt.legend(loc="upper left")
     plt.grid(True, alpha=0.3)
     plt.savefig("rl_exercises/week_3/Sutton_experiment1_figure4.pdf")
-    print("Saved Sutton_experiment1_figure4.pdf")
+    print("Saved Sutton_experiment2_figure4.pdf")
 
 
 def plot_figure_5(lambda_values, best_errors):
@@ -224,7 +224,7 @@ def plot_figure_5(lambda_values, best_errors):
     plt.title("Reproduction Sutton (1988) - Figure 5")
     plt.grid(True, linestyle="--", alpha=0.5)
     plt.savefig("rl_exercises/week_3/Sutton_experiment1_figure5.pdf")
-    print("Saved Sutton_experiment1_figure5.pdf")
+    print("Saved Sutton_experiment2_figure5.pdf")
 
 
 # ------------------------------------
@@ -281,7 +281,7 @@ with open("rl_exercises/week_3/experiment2_figure4.csv", "w", newline="") as f:
     writer.writerow(["lambda"] + [f"alpha_{a:.4f}" for a in alpha_values])
     for i, lambd in enumerate(lambda_values):
         writer.writerow([lambd] + list(rms_errors_repeated[i]))
-print("Saved experiment1_figure4.csv")
+print("Saved experiment2_figure4.csv")
 
 
 # Save the results of experiment 1 (figure 5) to a CSV
@@ -290,7 +290,7 @@ with open("rl_exercises/week_3/experiment2_figure5.csv", "w", newline="") as f:
     writer.writerow(["lambda", "best_rms_error"])
     for lambd, error in zip(lambda_values, best_errors):
         writer.writerow([lambd, error])
-print("Saved experiment1_figure5.csv")
+print("Saved experiment2_figure5.csv")
 
 # Plot the figures 4 and 5
 plot_figure_4(lambda_values, rms_errors_repeated, alpha_values)
