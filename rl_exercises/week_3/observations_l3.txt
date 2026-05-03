@@ -1,0 +1,64 @@
+OBSERVATIONS: REPLICATION OF SUTTON (1988) TD-LAMBDA EXPERIMENTS
+
+This document records the formal observations and analysis of the TD lambda
+algorithm implemented on the Bounded Random Walk environment. The primary
+objective was to replicate the performance comparisons between temporal-
+difference methods and classical supervised learning as presented in Richard
+Sutton’s 1988 research.  
+
+    EXPERIMENT 1: REPEATED PRESENTATIONS (Figure 3)
+
+Source Data: experiment1_figure3.csv
+Visualization: Sutton_experiment1_figure3.pdf
+
+This experiment evaluated the convergence of the weight vector when training
+sets were presented repeatedly until the weight changes became negligible.
+It was observed that the Root Mean Square (RMS) error is consistently minimized
+at lower values of lambda and increases as lambda approaches the supervised
+learning limit of 1.0. Specifically, for lambda = 0.0, the RMS error
+converged to 0.1259, whereas the Widrow-Hoff equivalent (lambda = 1.0) resulted
+in a significantly higher error of 0.1702. These results indicate that
+when learning from limited data in a batch setting, updating based on immediate
+subsequent predictions is more effective than updating based on final outcomes
+alone.
+
+    EXPERIMENT 2: SINGLE PRESENTATION (Figure 4)
+
+Source Data: experiment2_figure4.csv
+Visualization: Sutton_experiment2_figure4.pdf
+
+The second experiment transitioned to a single presentation to evaluate the
+learning efficiency and parameter sensitivity under limited data exposure.
+The stability profiles observed across different lambda values demonstrate that
+lower lambda values (0.0 to 0.3) are highly robust, maintaining low RMS errors
+across a broad range of learning rates (alpha). In contrast, higher lambda values,
+particularly lambda = 1.0, exhibited high sensitivity. The error diverged sharply
+as alpha increased beyond 0.2. These findings confirm that TD methods are more
+forgiving regarding hyperparameter selection and more stable under the noise of
+individual sequences than supervised learning approaches.  
+
+    SUMMARY OF THE OPTIMAL PERFORMANCE CURVE (Figure 5)
+
+Source Data: experiment2_figure5.csv
+Visualization: Sutton_experiment2_figure5.pdf
+
+This analysis consolidated the results by identifying the best possible error
+for each lambda when paired with its optimal alpha. The data reveals
+a non-linear relationship where the global minimum error occurs at an
+intermediate value of lambda = 0.1, yielding an RMS error of 0.0665.
+As lambda increased toward 1.0, the best achievable error nearly tripled,
+reaching 0.1875. The resulting "dipped" curve is evidence for the TD advantage,
+showing this type of learning from a prediction is more efficient than the
+Monte Carlo approach of learning only from the final outcome.  
+
+    FINAL CONCLUSION
+
+The replication successfully confirms that for the Bounded Random Walk task,
+the TD lambda algorithm is superior to supervised learning in both accuracy
+and stability. While the specific numerical results in this simulation differ
+slightly from those reported in the paper (probably primarily due to the
+stochastic nature of the generated training sequences) the overall findings
+and trends match the paper's original conclusions. By utilizing the Markovian
+structure of the state space through bootstrapping, the agent achieves
+significantly higher accuracy and better data efficiency than an agent relying
+solely on end-to-end outcomes.
