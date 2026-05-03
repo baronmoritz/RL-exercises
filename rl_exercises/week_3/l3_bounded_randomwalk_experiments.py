@@ -108,6 +108,49 @@ def experiment1_repeated_presentations(
     return rms_errors
 
 
+def experiment2_single_presentation(
+    lambda_values, alpha_values, n_training_sets=100, n_sequences_per_set=10
+):
+    """
+    Reproduces experiment 2: Single Presentation (Figure 4).
+    """
+
+    true_probabilities = np.array([0.0, 1 / 6, 1 / 3, 1 / 2, 2 / 3, 5 / 6, 1.0])
+
+    # Result matrix: rows -> lambdas, columns -> alphas
+    results = np.full((len(lambda_values), len(alpha_values)), np.nan)
+
+    for i, lambd in enumerate(lambda_values):
+        for j, alpha in enumerate(alpha_values):
+            trial_errors = []
+
+            for _ in range(n_training_sets):
+                # Generate the environment and the agent
+                env = BoundedRandomWalkEnv()
+                agent = TDLambdaAgent(
+                    env, alpha=alpha, gamma=1.0, lambd=lambd, initial_value=0.5
+                )
+
+                training_set = generate_training_set(
+                    env, n_sequences=n_sequences_per_set
+                )
+
+                # Loop over the sequences
+                for sequence in training_set:
+                    agent.e_traces.fill(0.0)
+                    for transition in sequence:
+                        agent.update_agent([transition], accumulate=False)
+
+                # Calculate the mean squared error
+                rms_error = agent.rms_error(true_probabilities)
+                trial_errors.append(rms_error)
+
+            # Average the rms errors over the number of training sets
+            results[i, j] = np.mean(trial_errors)
+
+    return results
+
+
 # Experiment 1: Repeated Presentations
 print("Experiment 1: Repeated Presentations (Figure 3)")
 rms_errors_repeated = experiment1_repeated_presentations(
@@ -138,3 +181,35 @@ plt.legend()
 # Save as PDF
 plt.tight_layout()
 plt.savefig("rl_exercises/week_3/Sutton_experiment1_figure3.pdf")
+
+
+# Experiment 2: Single Representation
+print("\nExperiment 2: Single Representation (Figure 4)")
+alpha_values = np.linspace(0.00001, 0.6, 13)
+rms_errors_repeated = experiment2_single_presentation(
+    lambda_values=lambda_values,
+    alpha_values=alpha_values,
+    n_training_sets=100,
+    n_sequences_per_set=10,
+)
+
+plt.figure(figsize=(10, 7))
+
+for i, lambd in enumerate(lambda_values):
+    # Remove nan values (divergence)
+    valid_indices = ~np.isnan(rms_errors_repeated[i])
+    plt.plot(
+        alpha_values[valid_indices],
+        rms_errors_repeated[i][valid_indices],
+        "o-",
+        label=f"λ = {lambd}",
+    )
+
+plt.ylim(0.0, 0.7)
+plt.xlim(0.0, 0.6)
+plt.xlabel("alpha")
+plt.ylabel("ERROR")
+plt.title("Reproduction Sutton (1988) - Figure 4")
+plt.legend(loc="upper left")
+plt.grid(True, alpha=0.3)
+plt.savefig("rl_exercises/week_3/Sutton_experiment1_figure4.pdf")
