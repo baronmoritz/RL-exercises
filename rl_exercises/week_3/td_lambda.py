@@ -133,3 +133,41 @@ class TDLambdaAgent(AbstractAgent):
             self.e_traces.fill(0.0)
 
         return float(self.V[state])
+
+    def rms_error(self, true_values: np.ndarray) -> float:
+        """Compute the root mean squared error between the learned V
+        and the true values.
+
+        Parameters
+        ----------
+        true_values : np.ndarray
+            Array of true values for each state (e.g., [0.0, 1/6, 1/3, 1/2, 2/3, 5/6, 1.0])
+
+        Returns
+        -------
+        float
+            RMS error between self.V and the true_values
+        """
+
+        # Ensure true_values has the same length as self.V
+        assert len(true_values) == self.n_states, (
+            f"true_values length ({len(true_values)}) must match n_states ({self.n_states})"
+        )
+
+        # Calculate the mean squared error for non-terminal states only
+        # since terminal states are not learned
+        non_terminal_states = []
+        for s in range(self.n_states):
+            if (
+                not hasattr(self.env, "terminal_states")
+                or s not in self.env.terminal_states
+            ):
+                non_terminal_states.append(s)
+
+        # Square the errors
+        squared_errors = (
+            self.V[non_terminal_states] - true_values[non_terminal_states]
+        ) ** 2
+
+        # Calculate the mean and get the square root before returning
+        return float(np.sqrt(np.mean(squared_errors)))
