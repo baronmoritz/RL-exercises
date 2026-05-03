@@ -151,6 +151,88 @@ def experiment2_single_presentation(
     return results
 
 
+def plot_figure_3(lambda_values, rms_errors_repeated):
+
+    # Now, we recreate the plot from the paper
+    plt.figure(figsize=(10, 6))
+    plt.plot(
+        lambda_values,
+        rms_errors_repeated,
+        "o-",
+        linewidth=2,
+        markersize=8,
+        label="TD(λ)",
+    )
+
+    # Special mark for λ=1 (Widrow-Hoff)
+    plt.plot(
+        1.0, rms_errors_repeated[-1], "ro", markersize=10, label="Widrow-Hoff (λ=1)"
+    )
+    plt.xlabel("λ", fontsize=12)
+    plt.ylabel(f"Error using best alpha ({0.01})", fontsize=12)
+    plt.title("Reproduction Sutton (1988) - Figure 3", fontsize=14)
+    plt.xticks(lambda_values)
+    plt.grid(True, linestyle="--", alpha=0.7)
+    plt.legend()
+
+    # Save as PDF
+    plt.tight_layout()
+    plt.savefig("rl_exercises/week_3/Sutton_experiment1_figure3.pdf")
+
+
+def plot_figure_4(lambda_values, rms_errors_repeated, alpha_values):
+    plt.figure(figsize=(10, 7))
+
+    for i, lambd in enumerate(lambda_values):
+        # Remove nan values (divergence)
+        valid_indices = ~np.isnan(rms_errors_repeated[i])
+        plt.plot(
+            alpha_values[valid_indices],
+            rms_errors_repeated[i][valid_indices],
+            "o-",
+            label=f"λ = {lambd}",
+        )
+
+    plt.ylim(0.0, 0.7)
+    plt.xlim(0.0, 0.6)
+    plt.xlabel("alpha")
+    plt.ylabel("ERROR")
+    plt.title("Reproduction Sutton (1988) - Figure 4")
+    plt.legend(loc="upper left")
+    plt.grid(True, alpha=0.3)
+    plt.savefig("rl_exercises/week_3/Sutton_experiment1_figure4.pdf")
+
+
+def plot_figure_5(lambda_values, rms_errors_repeated):
+
+    # Figure 5 using the values from experiment 2
+    # Find the minimum error for each lambda (ignoring NaNs)
+    best_errors = []
+    for i in range(len(lambda_values)):
+        # We take the minimum along the alpha axis for this specific lambda
+        valid_results = rms_errors_repeated[i][~np.isnan(rms_errors_repeated[i])]
+        if len(valid_results) > 0:
+            best_errors.append(np.min(valid_results))
+        else:
+            best_errors.append(np.nan)
+
+    plt.figure(figsize=(8, 6))
+    plt.plot(
+        lambda_values,
+        best_errors,
+        "o-",
+        markerfacecolor="white",
+        markersize=8,
+        color="black",
+    )
+
+    plt.xlabel("λ")
+    plt.ylabel("Error using best alpha")
+    plt.title("Reproduction Sutton (1988) - Figure 5")
+    plt.grid(True, linestyle="--", alpha=0.5)
+    plt.savefig("rl_exercises/week_3/Sutton_experiment1_figure5.pdf")
+
+
 # Experiment 1: Repeated Presentations
 print("Experiment 1: Repeated Presentations (Figure 3)")
 rms_errors_repeated = experiment1_repeated_presentations(
@@ -163,25 +245,7 @@ rms_errors_repeated = experiment1_repeated_presentations(
 for lambd, error in zip(lambda_values, rms_errors_repeated):
     print(f"λ={lambd:.1f}: RMS Error = {error:.4f}")
 
-# Now, we recreate the plot from the paper
-plt.figure(figsize=(10, 6))
-plt.plot(
-    lambda_values, rms_errors_repeated, "o-", linewidth=2, markersize=8, label="TD(λ)"
-)
-
-# Special mark for λ=1 (Widrow-Hoff)
-plt.plot(1.0, rms_errors_repeated[-1], "ro", markersize=10, label="Widrow-Hoff (λ=1)")
-plt.xlabel("λ", fontsize=12)
-plt.ylabel(f"Error using best alpha ({0.01})", fontsize=12)
-plt.title("Reproduction Sutton (1988) - Figure 3", fontsize=14)
-plt.xticks(lambda_values)
-plt.grid(True, linestyle="--", alpha=0.7)
-plt.legend()
-
-# Save as PDF
-plt.tight_layout()
-plt.savefig("rl_exercises/week_3/Sutton_experiment1_figure3.pdf")
-
+plot_figure_3(lambda_values, rms_errors_repeated)
 
 # Experiment 2: Single Representation
 print("\nExperiment 2: Single Representation (Figure 4)")
@@ -193,51 +257,7 @@ rms_errors_repeated = experiment2_single_presentation(
     n_sequences_per_set=10,
 )
 
-plt.figure(figsize=(10, 7))
 
-for i, lambd in enumerate(lambda_values):
-    # Remove nan values (divergence)
-    valid_indices = ~np.isnan(rms_errors_repeated[i])
-    plt.plot(
-        alpha_values[valid_indices],
-        rms_errors_repeated[i][valid_indices],
-        "o-",
-        label=f"λ = {lambd}",
-    )
+plot_figure_4(lambda_values, rms_errors_repeated, alpha_values)
 
-plt.ylim(0.0, 0.7)
-plt.xlim(0.0, 0.6)
-plt.xlabel("alpha")
-plt.ylabel("ERROR")
-plt.title("Reproduction Sutton (1988) - Figure 4")
-plt.legend(loc="upper left")
-plt.grid(True, alpha=0.3)
-plt.savefig("rl_exercises/week_3/Sutton_experiment1_figure4.pdf")
-
-
-# Figure 5 using the values from experiment 2
-# Find the minimum error for each lambda (ignoring NaNs)
-best_errors = []
-for i in range(len(lambda_values)):
-    # We take the minimum along the alpha axis for this specific lambda
-    valid_results = rms_errors_repeated[i][~np.isnan(rms_errors_repeated[i])]
-    if len(valid_results) > 0:
-        best_errors.append(np.min(valid_results))
-    else:
-        best_errors.append(np.nan)
-
-plt.figure(figsize=(8, 6))
-plt.plot(
-    lambda_values,
-    best_errors,
-    "o-",
-    markerfacecolor="white",
-    markersize=8,
-    color="black",
-)
-
-plt.xlabel("λ")
-plt.ylabel("Error using best alpha")
-plt.title("Reproduction Sutton (1988) - Figure 5")
-plt.grid(True, linestyle="--", alpha=0.5)
-plt.savefig("rl_exercises/week_3/Sutton_experiment1_figure5.pdf")
+plot_figure_5(lambda_values, rms_errors_repeated)
