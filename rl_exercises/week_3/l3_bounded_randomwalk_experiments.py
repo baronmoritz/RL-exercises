@@ -1,3 +1,5 @@
+import csv
+
 import matplotlib.pyplot as plt
 import numpy as np
 from rl_exercises.week_3.bounded_randomwalk import BoundedRandomWalkEnv
@@ -178,6 +180,7 @@ def plot_figure_3(lambda_values, rms_errors_repeated):
     # Save as PDF
     plt.tight_layout()
     plt.savefig("rl_exercises/week_3/Sutton_experiment1_figure3.pdf")
+    print("Saved Sutton_experiment1_figure3.pdf")
 
 
 def plot_figure_4(lambda_values, rms_errors_repeated, alpha_values):
@@ -201,20 +204,10 @@ def plot_figure_4(lambda_values, rms_errors_repeated, alpha_values):
     plt.legend(loc="upper left")
     plt.grid(True, alpha=0.3)
     plt.savefig("rl_exercises/week_3/Sutton_experiment1_figure4.pdf")
+    print("Saved Sutton_experiment1_figure4.pdf")
 
 
-def plot_figure_5(lambda_values, rms_errors_repeated):
-
-    # Figure 5 using the values from experiment 2
-    # Find the minimum error for each lambda (ignoring NaNs)
-    best_errors = []
-    for i in range(len(lambda_values)):
-        # We take the minimum along the alpha axis for this specific lambda
-        valid_results = rms_errors_repeated[i][~np.isnan(rms_errors_repeated[i])]
-        if len(valid_results) > 0:
-            best_errors.append(np.min(valid_results))
-        else:
-            best_errors.append(np.nan)
+def plot_figure_5(lambda_values, best_errors):
 
     plt.figure(figsize=(8, 6))
     plt.plot(
@@ -231,8 +224,10 @@ def plot_figure_5(lambda_values, rms_errors_repeated):
     plt.title("Reproduction Sutton (1988) - Figure 5")
     plt.grid(True, linestyle="--", alpha=0.5)
     plt.savefig("rl_exercises/week_3/Sutton_experiment1_figure5.pdf")
+    print("Saved Sutton_experiment1_figure5.pdf")
 
 
+# ------------------------------------
 # Experiment 1: Repeated Presentations
 print("Experiment 1: Repeated Presentations (Figure 3)")
 rms_errors_repeated = experiment1_repeated_presentations(
@@ -245,8 +240,18 @@ rms_errors_repeated = experiment1_repeated_presentations(
 for lambd, error in zip(lambda_values, rms_errors_repeated):
     print(f"λ={lambd:.1f}: RMS Error = {error:.4f}")
 
+# Save the results of experiment 1 to a CSV
+with open("rl_exercises/week_3/experiment1_figure3.csv", "w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerow(["lambda", "rms_error"])
+    for lambd, error in zip(lambda_values, rms_errors_repeated):
+        writer.writerow([lambd, error])
+print("Saved experiment1_figure3.csv")
+
+# Plot figure 3
 plot_figure_3(lambda_values, rms_errors_repeated)
 
+# -----------------------------------
 # Experiment 2: Single Representation
 print("\nExperiment 2: Single Representation (Figure 4)")
 alpha_values = np.linspace(0.00001, 0.6, 13)
@@ -257,7 +262,36 @@ rms_errors_repeated = experiment2_single_presentation(
     n_sequences_per_set=10,
 )
 
+# Find the minimum error for each lambda (ignoring NaNs)
+# This is used for figure 5
+best_errors = []
+for i in range(len(lambda_values)):
+    # We take the minimum along the alpha axis for this specific lambda
+    valid_results = rms_errors_repeated[i][~np.isnan(rms_errors_repeated[i])]
+    if len(valid_results) > 0:
+        best_errors.append(np.min(valid_results))
+    else:
+        best_errors.append(np.nan)
 
+
+# Save the results of experiment 1 (figure 4) to a CSV
+with open("rl_exercises/week_3/experiment2_figure4.csv", "w", newline="") as f:
+    writer = csv.writer(f)
+    # Header: lambda, then all alpha values
+    writer.writerow(["lambda"] + [f"alpha_{a:.4f}" for a in alpha_values])
+    for i, lambd in enumerate(lambda_values):
+        writer.writerow([lambd] + list(rms_errors_repeated[i]))
+print("Saved experiment1_figure4.csv")
+
+
+# Save the results of experiment 1 (figure 5) to a CSV
+with open("rl_exercises/week_3/experiment2_figure5.csv", "w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerow(["lambda", "best_rms_error"])
+    for lambd, error in zip(lambda_values, best_errors):
+        writer.writerow([lambd, error])
+print("Saved experiment1_figure5.csv")
+
+# Plot the figures 4 and 5
 plot_figure_4(lambda_values, rms_errors_repeated, alpha_values)
-
-plot_figure_5(lambda_values, rms_errors_repeated)
+plot_figure_5(lambda_values, best_errors)
