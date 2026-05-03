@@ -213,3 +213,31 @@ plt.title("Reproduction Sutton (1988) - Figure 4")
 plt.legend(loc="upper left")
 plt.grid(True, alpha=0.3)
 plt.savefig("rl_exercises/week_3/Sutton_experiment1_figure4.pdf")
+
+
+# Figure 5 using the values from experiment 2
+# Find the minimum error for each lambda (ignoring NaNs)
+best_errors = []
+for i in range(len(lambda_values)):
+    # We take the minimum along the alpha axis for this specific lambda
+    valid_results = rms_errors_repeated[i][~np.isnan(rms_errors_repeated[i])]
+    if len(valid_results) > 0:
+        best_errors.append(np.min(valid_results))
+    else:
+        best_errors.append(np.nan)
+
+plt.figure(figsize=(8, 6))
+plt.plot(
+    lambda_values,
+    best_errors,
+    "o-",
+    markerfacecolor="white",
+    markersize=8,
+    color="black",
+)
+
+plt.xlabel("λ")
+plt.ylabel("Error using best alpha")
+plt.title("Reproduction Sutton (1988) - Figure 5")
+plt.grid(True, linestyle="--", alpha=0.5)
+plt.savefig("rl_exercises/week_3/Sutton_experiment1_figure5.pdf")
