@@ -30,7 +30,7 @@ class TDLambdaAgent(AbstractAgent):
             Learning Rate, by default 0.5
         gamma : float, optional
             Discount Factor , by default 1.0
-        lamd : float, optional
+        lambd : float, optional
             Trace decay, by default 0.5
         initial_value : float, optional
             Initial value to initialize the weights, by default 0.5
@@ -60,6 +60,10 @@ class TDLambdaAgent(AbstractAgent):
         if hasattr(env, "terminal_states"):
             for state in env.terminal_states:
                 self.V[state] = 0.0  # Terminal states have the value 0
+
+        # For the first experiment of the paper, we need to be able to save
+        # the accumulated delta w
+        self.accumulated_delta_w = np.zeros(self.n_states, dtype=float)
 
     def predict_action(
         self, state: np.ndarray, info: dict = {}, evaluate: bool = False
@@ -93,13 +97,16 @@ class TDLambdaAgent(AbstractAgent):
         self.V = np.load(path, allow_pickle=True).item()
         self.e_traces = np.zeros(self.n_states, dtype=float)
 
-    def update_agent(self, batch: list) -> float:  # type: ignore
+    def update_agent(self, batch: list, accumulate: bool = False) -> float:  # type: ignore
         """Unpack a batch from SimpleBuffer and then update the agent.
 
         Parameters
         ----------
         batch : list
             List of (state, action, reward, next_state, done, info) tuples
+        accumulate : bool, optional
+            If True, accumulate delta_w for batch updates(as requiered for Experiment 1).
+            If False, update weights immediately as normal (as in Experiment 2).
 
         Returns
         -------
@@ -125,8 +132,11 @@ class TDLambdaAgent(AbstractAgent):
         self.e_traces *= self.gamma * self.lambd
         self.e_traces[state] += 1.0
 
-        # Update all state values
-        self.V += self.alpha * delta * self.e_traces
+        if accumulate:  # For experiment 1 of the paper -> accumulate
+            self.accumulated_delta_w += self.alpha * delta * self.e_traces
+        else:
+            # Update all state values
+            self.V += self.alpha * delta * self.e_traces
 
         # Reset eligibility traces at the end of episode
         if done:
@@ -141,7 +151,7 @@ class TDLambdaAgent(AbstractAgent):
         Parameters
         ----------
         true_values : np.ndarray
-            Array of true values for each state (e.g., [0.0, 1/6, 1/3, 1/2, 2/3, 5/6, 1.0])
+            Array of true values for each state(e.g., [0.0, 1/6, 1/3, 1/2, 2/3, 5/6, 1.0])
 
         Returns
         -------
@@ -171,3 +181,14 @@ class TDLambdaAgent(AbstractAgent):
 
         # Calculate the mean and get the square root before returning
         return float(np.sqrt(np.mean(squared_errors)))
+
+    def apply_accumulated_updates(self) -> None:
+        """Apply accumulated delta w to weights (for Experiment 1)."""
+
+        self.V += self.accumulated_delta_w
+        self.accumulated_delta_w.fill(0.0)  # Reset für nächsten Training Set
+
+    def reset_accumulated_updates(self) -> None:
+        """Reset accumulated delta w for a new training set."""
+
+        self.accumulated_delta_w.fill(0.0)
