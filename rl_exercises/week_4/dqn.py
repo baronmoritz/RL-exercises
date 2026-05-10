@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Tuple
 
 import gymnasium as gym
 import hydra
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
@@ -14,6 +15,25 @@ from omegaconf import DictConfig
 from rl_exercises.agent import AbstractAgent
 from rl_exercises.week_4.buffers import ReplayBuffer
 from rl_exercises.week_4.networks import QNetwork
+
+
+# for plotting (level 1)
+# def plot_training(frames, rewards, label):
+#     plt.plot(frames, rewards, label=label)
+#     plt.xlabel('Frames')
+#     plt.ylabel('Mean Reward (10 eps)')
+#     plt.legend()
+#     plt.savefig(f"plot_{label}.png")
+def plot_training(frames, rewards, label):
+    plt.figure(figsize=(10, 5))  # Create a fresh figure
+    plt.plot(frames, rewards, label=label)
+    plt.xlabel("Frames")
+    plt.ylabel("Mean Reward (10 eps)")
+    plt.title(f"Training Curve: {label}")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f"plot_{label}.png")
+    plt.close()  # CRITICAL: Closes the window/clears memory for the next run
 
 
 def set_seed(env: gym.Env, seed: int = 0) -> None:
@@ -59,6 +79,7 @@ class DQNAgent(AbstractAgent):
         epsilon_decay: int = 500,
         target_update_freq: int = 1000,
         seed: int = 0,
+        hidden_dim: int = 64,
     ) -> None:
         """
         Initialize replay buffer, Q‐networks, optimizer, and hyperparameters.
@@ -97,6 +118,7 @@ class DQNAgent(AbstractAgent):
             epsilon_decay,
             target_update_freq,
             seed,
+            hidden_dim,
         )
         self.env = env
         set_seed(env, seed)
@@ -105,8 +127,8 @@ class DQNAgent(AbstractAgent):
         n_actions = env.action_space.n
 
         # main Q‐network and frozen target
-        self.q = QNetwork(obs_dim, n_actions)
-        self.target_q = QNetwork(obs_dim, n_actions)
+        self.q = QNetwork(obs_dim, n_actions, hidden_dim)
+        self.target_q = QNetwork(obs_dim, n_actions, hidden_dim)
         self.target_q.load_state_dict(self.q.state_dict())
 
         self.optimizer = optim.Adam(self.q.parameters(), lr=lr)
@@ -139,7 +161,7 @@ class DQNAgent(AbstractAgent):
             -1.0 * self.total_steps / self.epsilon_decay
         )
 
-        return self.epsilon_start
+        return eps
 
     def predict_action(
         self, state: np.ndarray, info: Dict[str, Any] = {}, evaluate: bool = False
@@ -282,6 +304,10 @@ class DQNAgent(AbstractAgent):
         ep_reward = 0.0
         recent_rewards: List[float] = []
 
+        # Data for plotting
+        plot_frames = []
+        plot_avg_rewards = []
+
         for frame in range(1, num_frames + 1):
             action = self.predict_action(state)
             next_state, reward, done, truncated, _ = self.env.step(action)
@@ -308,8 +334,12 @@ class DQNAgent(AbstractAgent):
                     print(
                         f"Frame {frame}, AvgReward(10): {avg:.2f}, ε={self.epsilon():.3f}"
                     )
+                    plot_frames.append(frame)
+                    plot_avg_rewards.append(avg)
 
         print("Training complete.")
+
+        return plot_frames, plot_avg_rewards
 
 
 @hydra.main(config_path="../configs/agent/", config_name="dqn", version_base="1.1")
@@ -319,6 +349,7 @@ def main(cfg: DictConfig):
     set_seed(env, cfg.seed)
 
     # 2) TODO: map config → agent kwargs
+    # Added network size
     agent_kwargs = {
         "env": env,
         "buffer_capacity": cfg.agent.buffer_capacity,
@@ -330,13 +361,22 @@ def main(cfg: DictConfig):
         "epsilon_decay": cfg.agent.epsilon_decay,
         "target_update_freq": cfg.agent.target_update_freq,
         "seed": cfg.seed,
+        "hidden_dim": cfg.agent.hidden_dim,
     }
 
     # 3) TODO:instantiate & train
     agent = DQNAgent(
         **agent_kwargs
     )  # ** unpackts the dictionary into keyword arguments
-    agent.train(cfg.train.num_frames)
+
+    frames, rewards = agent.train(cfg.train.num_frames)
+    print(
+        f"bs{cfg.agent.batch_size}_cap{cfg.agent.buffer_capacity}_hid{cfg.agent.hidden_dim}"
+    )
+
+    # level 1: plottraining curve
+    label = f"bs{cfg.agent.batch_size}_cap{cfg.agent.buffer_capacity}_hid{cfg.agent.hidden_dim}"
+    plot_training(frames, rewards, label)
 
 
 if __name__ == "__main__":
