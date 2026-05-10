@@ -181,8 +181,8 @@ def main():
         all_configs[config["name"]] = results
 
     # Save raw data
-    os.makedirs("l3_results", exist_ok=True)
-    with open("l3_results/all_configs.pkl", "wb") as f:
+    os.makedirs("rl_exercises/week_4/l3_results", exist_ok=True)
+    with open("rl_exercises/week_4/l3_results", "wb") as f:
         pickle.dump(all_configs, f)
 
     # Prepare data for Rliable
