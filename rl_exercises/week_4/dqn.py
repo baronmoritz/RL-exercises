@@ -62,7 +62,7 @@ def set_seed(env: gym.Env, seed: int = 0) -> None:
 
 class DQNAgent(AbstractAgent):
     """
-    Deep Q‐Learning agent with ε‐greedy policy and target network.
+    Deep Q-Learning agent with ε-greedy policy and target network.
 
     Derives from AbstractAgent by implementing:
       - predict_action
@@ -83,9 +83,13 @@ class DQNAgent(AbstractAgent):
         target_update_freq: int = 1000,
         seed: int = 0,
         hidden_dim: int = 64,
+        use_double_dqn: bool = False,
+        use_prioritized_replay: bool = False,
+        per_alpha: float = 0.6,
+        per_beta: float = 0.4,
     ) -> None:
         """
-        Initialize replay buffer, Q‐networks, optimizer, and hyperparameters.
+        Initialize replay buffer, Q-networks, optimizer, and hyperparameters.
 
         Parameters
         ----------
@@ -94,7 +98,7 @@ class DQNAgent(AbstractAgent):
         buffer_capacity : int
             Max experiences stored.
         batch_size : int
-            Mini‐batch size for updates.
+            Mini-batch size for updates.
         lr : float
             Learning rate.
         gamma : float
@@ -106,9 +110,17 @@ class DQNAgent(AbstractAgent):
         epsilon_decay : int
             Exponential decay parameter.
         target_update_freq : int
-            How many updates between target‐network syncs.
+            How many updates between target-network syncs.
         seed : int
             RNG seed.
+        use_double_dqn : bool
+            Whether to use Double DQN.
+        use_prioritized_replay : bool
+            Whether to use Prioritized Experience Replay.
+        per_alpha : float
+            Alpha parameter for prioritized replay.
+        per_beta : float
+            Beta parameter for prioritized replay.
         """
         super().__init__(
             env,
@@ -129,13 +141,22 @@ class DQNAgent(AbstractAgent):
         obs_dim = env.observation_space.shape[0]
         n_actions = env.action_space.n
 
-        # main Q‐network and frozen target
+        # main Q-network and frozen target
         self.q = QNetwork(obs_dim, n_actions, hidden_dim)
         self.target_q = QNetwork(obs_dim, n_actions, hidden_dim)
         self.target_q.load_state_dict(self.q.state_dict())
 
         self.optimizer = optim.Adam(self.q.parameters(), lr=lr)
-        self.buffer = ReplayBuffer(buffer_capacity)
+
+        # Choose buffer type
+        if use_prioritized_replay:
+            from rl_exercises.week_4.buffers import PrioritizedReplayBuffer
+
+            self.buffer = PrioritizedReplayBuffer(
+                buffer_capacity, alpha=per_alpha, beta=per_beta
+            )
+        else:
+            self.buffer = ReplayBuffer(buffer_capacity)
 
         # hyperparams
         self.batch_size = batch_size
@@ -144,6 +165,8 @@ class DQNAgent(AbstractAgent):
         self.epsilon_final = epsilon_final
         self.epsilon_decay = epsilon_decay
         self.target_update_freq = target_update_freq
+        self.use_double_dqn = use_double_dqn
+        self.use_prioritized_replay = use_prioritized_replay
 
         self.total_steps = 0  # for ε decay and target sync
 
@@ -156,7 +179,7 @@ class DQNAgent(AbstractAgent):
         float
             Exploration rate.
         """
-        # TODO: implement exponential‐decayin
+        # TODO: implement exponential-decayin
         # ε = ε_final + (ε_start - ε_final) * exp(-total_steps / ε_decay)
         # Currently, it is constant and returns the starting value ε
 
@@ -170,7 +193,7 @@ class DQNAgent(AbstractAgent):
         self, state: np.ndarray, info: Dict[str, Any] = {}, evaluate: bool = False
     ) -> Tuple[int, Dict]:
         """
-        Choose action via ε‐greedy (or purely greedy in eval mode).
+        Choose action via ε-greedy (or purely greedy in eval mode).
 
         Parameters
         ----------
@@ -257,6 +280,11 @@ class DQNAgent(AbstractAgent):
         loss_val : float
             MSE loss value.
         """
+        # Handle prioritized replay
+        if self.use_prioritized_replay:
+            training_batch, weights, indices = training_batch
+            weights = torch.tensor(weights, dtype=torch.float32)
+
         # unpack
         states, actions, rewards, next_states, dones, _ = zip(*training_batch)
         s = torch.tensor(np.array(states), dtype=torch.float32)
@@ -271,19 +299,44 @@ class DQNAgent(AbstractAgent):
 
         # TODO: compute TD target with frozen network
         with torch.no_grad():
-            # max Q(s', a') from target network
-            next_q_values = self.target_q(s_next).max(dim=1)[0]
-            # y = r + gamma * maxQ * (1 - done)
-            target = r + self.gamma * next_q_values * (
-                1 - mask
-            )  # just calculate target for not done states
+            if self.use_double_dqn:
+                # Double DQN: select action with online network, evaluate with target network
+                # argmax from online network
+                next_actions = self.q(s_next).argmax(dim=1, keepdim=True)
+                # evaluate with target network
+                next_q_values = self.target_q(s_next).gather(1, next_actions).squeeze(1)
+            else:
+                # Standard DQN: use target network for both
+                next_q_values = self.target_q(s_next).max(dim=1)[0]
 
-        loss = nn.MSELoss()(pred, target)
+            # y = r + gamma * maxQ * (1 - done)
+            target = r + self.gamma * next_q_values * (1 - mask)
+
+        # Compute loss
+        if self.use_prioritized_replay:
+            # Weighted MSE loss for prioritized experience replay
+            # Multiply each loss by the importance sampling weight
+            td_errors = pred - target
+            # We need to return TD errors for priority updates
+            self._last_td_errors = td_errors.detach().cpu().numpy()
+            self._last_indices = indices
+
+            # Weighted loss
+            losses = (pred - target) ** 2
+            weighted_losses = losses * weights
+            loss = weighted_losses.mean()
+        else:
+            loss = nn.MSELoss()(pred, target)
 
         # gradient step
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+
+        # Update priorities for prioritized replay
+        if self.use_prioritized_replay and hasattr(self, "_last_td_errors"):
+            for i, idx in enumerate(self._last_indices):
+                self.buffer.update_priority(idx, self._last_td_errors[i])
 
         # occasionally sync target network
         if self.total_steps % self.target_update_freq == 0:
@@ -334,8 +387,15 @@ class DQNAgent(AbstractAgent):
                 if len(recent_rewards) % 10 == 0:
                     # TODO: compute avg over last eval_interval episodes and print
                     avg = np.mean(recent_rewards[-10:])
+                    config_name = ""
+                    if self.use_double_dqn:
+                        config_name += "DoubleDQN"
+                    if self.use_prioritized_replay:
+                        config_name += "+PER"
+                    if not config_name:
+                        config_name = "BaseDQN"
                     print(
-                        f"Frame {frame}, AvgReward(10): {avg:.2f}, ε={self.epsilon():.3f}"
+                        f"Frame {frame}, {config_name}, AvgReward(10): {avg:.2f}, ε={self.epsilon():.3f}"
                     )
                     plot_frames.append(frame)
                     plot_avg_rewards.append(avg)
@@ -365,12 +425,14 @@ def main(cfg: DictConfig):
         "target_update_freq": cfg.agent.target_update_freq,
         "seed": cfg.seed,
         "hidden_dim": cfg.agent.hidden_dim,
+        "use_double_dqn": cfg.agent.get("use_double_dqn", False),
+        "use_prioritized_replay": cfg.agent.get("use_prioritized_replay", False),
+        "per_alpha": cfg.agent.get("per_alpha", 0.6),
+        "per_beta": cfg.agent.get("per_beta", 0.4),
     }
 
-    # 3) TODO:instantiate & train
-    agent = DQNAgent(
-        **agent_kwargs
-    )  # ** unpackts the dictionary into keyword arguments
+    # 3) instantiate & train
+    agent = DQNAgent(**agent_kwargs)
 
     frames, rewards = agent.train(cfg.train.num_frames)
 
