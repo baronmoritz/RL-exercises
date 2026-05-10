@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Tuple
 
 import os
 import pickle
+import random
 
 import gymnasium as gym
 import hydra
@@ -50,6 +51,7 @@ def set_seed(env: gym.Env, seed: int = 0) -> None:
     seed : int
         Random seed.
     """
+    random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     env.reset(seed=seed)
@@ -136,6 +138,7 @@ class DQNAgent(AbstractAgent):
             hidden_dim,
         )
         self.env = env
+        self.seed = seed  # Store seed for later use
         set_seed(env, seed)
 
         obs_dim = env.observation_space.shape[0]
@@ -356,7 +359,7 @@ class DQNAgent(AbstractAgent):
         eval_interval : int
             Every this many episodes, print average reward.
         """
-        state, _ = self.env.reset()
+        state, _ = self.env.reset(seed=self.seed)
         ep_reward = 0.0
         recent_rewards: List[float] = []
 
@@ -380,7 +383,7 @@ class DQNAgent(AbstractAgent):
                 _ = self.update_agent(batch)
 
             if done or truncated:
-                state, _ = self.env.reset()
+                state, _ = self.env.reset(seed=self.seed)
                 recent_rewards.append(ep_reward)
                 ep_reward = 0.0
                 # logging
