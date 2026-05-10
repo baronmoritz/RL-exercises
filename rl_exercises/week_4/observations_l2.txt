@@ -1,0 +1,8 @@
+run this to collect results from different seeds
+
+python dqn.py --multirun seed=0,1,2,3,4
+
+
+
+
+

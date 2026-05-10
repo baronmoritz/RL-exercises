@@ -4,6 +4,9 @@ Deep Q-Learning implementation.
 
 from typing import Any, Dict, List, Tuple
 
+import os
+import pickle
+
 import gymnasium as gym
 import hydra
 import matplotlib.pyplot as plt
@@ -370,13 +373,16 @@ def main(cfg: DictConfig):
     )  # ** unpackts the dictionary into keyword arguments
 
     frames, rewards = agent.train(cfg.train.num_frames)
-    print(
-        f"bs{cfg.agent.batch_size}_cap{cfg.agent.buffer_capacity}_hid{cfg.agent.hidden_dim}"
-    )
 
     # level 1: plottraining curve
-    label = f"bs{cfg.agent.batch_size}_cap{cfg.agent.buffer_capacity}_hid{cfg.agent.hidden_dim}"
-    plot_training(frames, rewards, label)
+    # label = f"bs{cfg.agent.batch_size}_cap{cfg.agent.buffer_capacity}_hid{cfg.agent.hidden_dim}"
+    # plot_training(frames, rewards, label)
+
+    # level 2: Save the rewards for this specific seed
+    data = {"frames": frames, "rewards": rewards}
+    os.makedirs("results", exist_ok=True)
+    with open(f"results/seed_{cfg.seed}.pkl", "wb") as f:
+        pickle.dump(data, f)
 
 
 if __name__ == "__main__":
