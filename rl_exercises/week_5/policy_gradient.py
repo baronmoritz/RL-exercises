@@ -1,5 +1,7 @@
 from typing import Any, Dict, List, Tuple
 
+import csv
+
 import gymnasium as gym
 import hydra
 import numpy as np
@@ -373,7 +375,21 @@ class REINFORCEAgent(AbstractAgent):
         eval_interval : int, optional
             Frequency of evaluation prints (default is 10).
         """
-        eval_env = gym.make(self.env.spec.id)  # fresh copy for eval
+
+        # Log everything into csv for plotting
+        csv_filename = "pg1.csv"
+        csv_headers = [
+            "episode",
+            "return",
+            "mean_critic_loss",
+            "mean_return",
+            "std_return",
+        ]
+        with open(csv_filename, mode="w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(csv_headers)
+
+        eval_env = gym.make(self.env.spec.id)
         for ep in range(1, num_episodes + 1):
             state, _ = self.env.reset()
             done = False
@@ -397,7 +413,9 @@ class REINFORCEAgent(AbstractAgent):
                 mean_ret, std_ret = self.evaluate(eval_env, num_episodes=eval_episodes)
                 print(f"[Eval ] Ep {ep:3d} AvgReturn {mean_ret:5.1f} ± {std_ret:4.1f}")
 
-        print("Training complete.")
+                with open(csv_filename, mode="a", newline="") as f:
+                    writer = csv.writer(f)
+                    writer.writerow([ep, total_return, loss, mean_ret, std_ret])
 
 
 @hydra.main(
