@@ -83,10 +83,21 @@ class Policy(nn.Module):
         torch.Tensor
             Softmax probabilities over actions, shape (batch_size, n_actions).
         """
-        # TODO: Apply fc1 followed by ReLU (Flatten input if needed)
-        # TODO: Apply fc2 to get logits
-        # TODO: Return softmax over logits along the last dimension
-        pass
+
+        # Flatten input if needed
+        if x.dim() == 1:
+            x = x.unsqueeze(0)
+        elif x.dim() > 2:
+            x = torch.flatten(x, start_dim=1)
+
+        # 1. ReLu after fc1
+        x = torch.nn.functional.relu(self.fc1(x))
+
+        # 2. fc2 to attain logits
+        logits = self.fc2(x)
+
+        # 3. return softmax over logits along the last dimension
+        return torch.nn.functional.softmax(logits, dim=-1)
 
 
 class REINFORCEAgent(AbstractAgent):
@@ -157,10 +168,30 @@ class REINFORCEAgent(AbstractAgent):
         info_out : dict
             Contains 'log_prob' if in training mode; empty if evaluating.
         """
-        # TODO: Pass state through the policy network to get action probabilities
+
+        # Convert Numpy-State to Pytorch-Tensor
+        state_t = torch.from_numpy(state).float()
+
+        # Pass state through the policy network to get action probabilities
+        action_probs = self.policy(state_t)
+        action_dist = torch.distributions.Categorical(action_probs)
+
         # If evaluate is True, return the action with highest probability
+        if evaluate:
+            action = torch.argmax(action_probs).item()
+            info_out = {}
+
         # Otherwise, sample from the action distribution and return the log-probability as a key in the dictionary (Hint: use torch.distributions.Categorical)
-        return 0, {}  # Placeholder return value
+        else:
+            action_tensor = action_dist.sample()
+            log_prob = action_dist.log_prob(action_tensor)
+            if log_prob.dim() > 0:
+                log_prob = log_prob.squeeze()
+
+            info_out = {"log_prob": log_prob}
+            action = action_tensor.item()
+
+        return action, info_out
 
     def compute_returns(self, rewards: List[float]) -> torch.Tensor:
         """
@@ -176,12 +207,23 @@ class REINFORCEAgent(AbstractAgent):
         torch.Tensor
             Discounted returns tensor of shape (len(rewards),).
         """
-        # TODO: Initialize running return R = 0
-        # TODO: Iterate over rewards and compute the return-to-go:
-        #       - Update R = r + gamma * R
-        #       - Insert R at the beginning of the returns list
-        # TODO: Convert the list of returns to a torch.Tensor and return
-        pass
+        # Initialize running return R = 0
+        returns = []
+        R = 0.0
+
+        # Iterate over rewards and compute the return-to-go:
+        for r in reversed(rewards):
+            #       - Update R = r + gamma * R
+            R = r + self.gamma * R
+
+            #       - Insert R at the beginning of the returns list
+            returns.append(R)
+
+        returns.reverse()
+
+        # Convert the list of returns to a torch.Tensor and return
+        # When trying to convert to float32 the testcase breaks.
+        return torch.tensor(returns, dtype=torch.float64)
 
     def update_agent(
         self,
@@ -210,9 +252,11 @@ class REINFORCEAgent(AbstractAgent):
         returns_t = self.compute_returns(rewards)
 
         # normalize advantages
-        # TODO: Normalize advantages with mean and standard deviation,
+        # Normalize advantages with mean and standard deviation,
         # and add 1e-8 to the denominator to avoid division by zero
-        advantages = returns_t
+        advantages = (returns_t - returns_t.mean()) / (
+            torch.std(returns_t, correction=0) + 1e-8
+        )
 
         lp_tensor = torch.stack(log_probs)
         loss = -torch.sum(lp_tensor * advantages)
@@ -275,14 +319,43 @@ class REINFORCEAgent(AbstractAgent):
         """
         self.policy.eval()
         returns: List[float] = []
-        # TODO: rollout num_episodes in eval_env and aggregate undiscounted returns across episodes
+        # rollout num_episodes in eval_env and aggregate undiscounted returns across episodes
+        with torch.no_grad():
+            for _ in range(num_episodes):
+                # Reset Environment
+                state, info = eval_env.reset()
+
+                episode_return = 0.0
+                done = False
+
+                while not done:
+                    # select action deterministic
+                    action, _ = self.predict_action(state, info, evaluate=True)
+
+                    # take next step
+                    next_state, reward, terminated, truncated, info = eval_env.step(
+                        action
+                    )
+
+                    # add reward to cumulative return
+                    episode_return += reward
+
+                    # check if terminated or trucated -> Break if either is True
+                    done = terminated or truncated
+
+                    # update state
+                    state = next_state
+
+                # save cumulative return of each episode
+                returns.append(episode_return)
 
         self.policy.train()  # Set back to training mode
 
-        # TODO: Return the mean and std of the returns across episodes
+        # Return the mean and std of the returns across episodes
+        # Nothing to do here?
         mean = np.mean(returns) if returns else 0.0
         std = np.std(returns) if returns else 0.0
-        return mean, std
+        return float(mean), float(std)
 
     def train(
         self,
