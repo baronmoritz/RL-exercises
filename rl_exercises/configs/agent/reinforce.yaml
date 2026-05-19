@@ -2,7 +2,9 @@
 
 # Gymnasium environment settings
 env:
-  name: CartPole-v1
+  #name: CartPole-v1
+  name: LunarLander-v3
+  #max_steps: 250  # Level 2: Change number of steps per episode (trajectory)
 
 # Random seed for reproducibility
 seed: 0

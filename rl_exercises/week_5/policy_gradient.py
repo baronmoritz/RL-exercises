@@ -413,6 +413,7 @@ def main(cfg: DictConfig) -> None:
         Hydra configuration with fields:
           env:
             name: str        # Gym environment id
+            max_steps: int
           seed: int
           agent:
             lr: float
@@ -427,6 +428,9 @@ def main(cfg: DictConfig) -> None:
     print(f"config: {cfg}")
     env = gym.make(cfg.env.name)
     set_seed(env, cfg.seed)
+
+    if "max_steps" in cfg.env:
+        env = gym.wrappers.TimeLimit(env, max_episode_steps=cfg.env.max_steps)
 
     # Instantiate agent with hyperparameters from config
     agent = REINFORCEAgent(
