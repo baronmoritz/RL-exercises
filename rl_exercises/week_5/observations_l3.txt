@@ -1,0 +1,59 @@
+EXPERIMENTAL RESULTS
+--------------------
+
+Results for Deep Deterministic Policy Gradient implementation
+Environment: LunarLander-v3
+Training episodes: 500 per seed
+
+Seed | Final Avg. Return | Mean Critic Loss | Mean Return | Std-Dev. Return
+1 | -74.62503722066714 | 19.345410198807716 | -43.98792495444565 | 6.154337892474583
+2 | -95.53267438310185 | 28.308288486564862 | 6.233029198018249  | 184.26328727653657
+3 | 195.2271836542179  | 13.369638873530286 | 224.21462528237362 | 25.83890390967732
+
+
+Results for REINFORCE implementation
+Environment: LunarLander-v3
+Training episodes: 1000 per seed
+
+Seed | Final Avg. Return | Mean Loss | Mean Return | Std-Dev Return
+1 | -98.56693282549104  | -36.17871423745871    | -125.30703112772953 | 16.776001487993877
+2 | -120.85954509868668 | -18.898644694727135   | -129.42530304875646 | 22.479393409487173
+3 | -672.5566816163864  | 4.711620769102046e-21 | -667.3349956731629  | 222.39797717232707
+
+PLOTS
+-----
+
+The experiment results are visualized in the following files:
+- l3_results/ddpg1.png: DDPG for 500 episodes with Seed 1
+- l3_results/ddpg2.png: DDPG for 500 episodes with Seed 2
+- l3_results/ddpg3.png: DDPG for 500 episodes with Seed 3
+
+- l3_results/pg1.png: REINFORCE for 1000 episodes with Seed 1
+- l3_results/pg2.png: REINFORCE for 1000 episodes with Seed 2
+- l3_results/pg3.png: REINFORCE for 1000 episodes with Seed 3
+
+The plots show:
+1. Both REINFORCE and DDPG are unable to solve the problem in Environment LunarLander!
+2. DDPG generally achieves higher final and mean returns, although they are small or even negative 
+3. REINFORCE generally has a higher standard deviation, meaning the learning process is less stable
+4. Seed 3 proved to be beneficial for DDPG, whereas it lead REINFORCE to fail miserably
+
+
+DISCUSSION
+----------
+
+In the plots it can be seen that DDPG generally has a more stable training process.
+The DDPG standard deviation is smaller with fewer outliers than REINFORCE's trainig process (view pg2.png and pg3.png in particular).
+This is the expected outcome.
+DDPG uses the Actor-Critic architecture, which makes it possible for the actor to learn from the evaluations made by the critic.
+The critic filters noise from the environment by calculating the expected long-term values instead of the current volatile rewards.
+
+REINFORCE only has the volatile rewards from each episode to work with.
+This is especially difficult when dealing with environments such as LunarLander, because rewards are sparse, 
+meaning they are only attainable when performing certain sequences of actions.
+Thus, REINFORCE, acting stochastically, sometimes achieves high rewards, sometimes it doesn't.
+DDPG doesn't have the same problem (not as much at least) and is able to find the sparse rewards in a more efficient manner.
+
+Further, DDPG uses Target-Networks for both the actor and the critic.
+When calculating the next Q-value, both can be used as a more stable baseline for calculation,
+because these "copies" keep very bad or very good episodes from taking too much influence on the Q-update. (we used τ = 0.001)

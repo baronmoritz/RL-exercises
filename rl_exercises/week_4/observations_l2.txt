@@ -1,0 +1,41 @@
+EXPERIMENTAL RESULTS
+--------------------
+
+Environment: CartPole-v1
+Seeds: 5 (0-4)
+Training frames: 20,000 per seed
+
+Seed | Final Reward
+----|-------------
+0 | 165.10
+1 | 193.70
+2 | 181.30
+3 | 206.10
+4 | 243.30
+
+Summary:
+- Mean: 197.90
+- Std Dev: ±26.45
+- Min: 165.10
+- Max: 243.30
+- Range: 78.20
+
+DISCUSSION
+----------
+
+What changes when using RLiable vs. plain averages?
+- RLiable provides Median, IQM, Mean with confidence intervals
+- Plain averages only show mean ± std dev
+- RLiable's IQM focuses on the middle 50% of results, making it more robust to outliers
+- Confidence intervals show reliability of estimates
+- Mean (197.90) > Median suggests some high-performing outliers
+
+Do you feel more confident in the results?
+Yes, we feel more confident in the results. RLiable provides multiple metrics and confidence intervals
+and by that gives us a more complete picture of performance variability across seeds.
+The range of 78.20 between best and worst seed shows the importance of multi-seed evaluation.
+
+Files:
+- rl_exercises/week_4/l2_results/dqn_rliable_analysis.png
+- rl_exercises/week_4/l2_results/dqn_training_curves.png
+- rl_exercises/week_4/l2_results/dqn_mean_std.png

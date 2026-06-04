@@ -1,0 +1,91 @@
+Level 3: Rainbow DQN Implementation Observations
+==================================================
+
+IMPLEMENTATION SUMMARY
+----------------------
+
+1. Prioritized Experience Replay Buffer (buffers.py)
+   - Implemented SumTree data structure for efficient sampling proportional to priority
+   - PrioritizedReplayBuffer class extends ReplayBuffer (as requested)
+   - Implemented stratified sampling for better coverage across priority range
+
+2. Double DQN (dqn.py)
+   - Extended DQNAgent class with use_double_dqn parameter
+   - Modified update_agent() method:
+     * Standard DQN: target = r + gamma * max_a Q_target(s', a')
+     * Double DQN: target = r + gamma * Q_target(s', argmax_a Q_online(s', a'))
+   - Action selection uses online network, evaluation uses target network
+   - Reduces overestimation bias by decoupling action selection and evaluation
+   - Weighted loss for prioritized replay: loss = (weights * td_errors^2).mean()
+
+3. Seed Management
+   - All random number generators are properly seeded:
+     * random.seed(seed) for Python's random module
+     * np.random.seed(seed) for NumPy
+     * torch.manual_seed(seed) for PyTorch
+     * env.reset(seed=seed) for Gymnasium environment
+
+4. Combined Implementation
+   - DQNAgent now supports both use_double_dqn and use_prioritized_replay flags
+   - When both are enabled, the agent uses:
+     * PrioritizedReplayBuffer for sampling (with stratified sampling)
+     * Double DQN for target calculation
+     * Weighted loss for prioritized replay
+
+EXPERIMENTAL RESULTS
+--------------------
+
+Environment: CartPole-v1
+Training frames: 50000 per seed
+Number of seeds: 5
+
+Configuration | Final Mean Reward | Std Dev
+-------------|------------------|--------
+Base DQN | 137.02 | ±64.49
+DQN + Prioritized Replay | 227.20 | ±132.68
+DQN + Double DQN | 174.32 | ±39.07
+DQN + Prioritized Replay + Double DQN | 234.64 | ±136.99
+
+PLOTS
+-----
+
+The experiment results are visualized in the following files:
+- l3_results/rainbow_comparison.png: Rliable analysis with Median, IQM, and Mean
+- l3_results/training_curve_*.png: Individual training curves per configuration
+
+The plots show:
+1. Base DQN has consistent but lower performance
+2. DQN + Prioritized Replay achieves the highest mean reward (227.20)
+3. DQN + Double DQN shows more stable learning (lowest std dev: ±39.07)
+4. The combination (DQN + Prioritized Replay + Double DQN) achieves the best overall
+   performance (234.64) but with high variance (±136.99)
+
+OBSERVATIONS
+------------
+
+1. Base DQN Performance:
+   - Standard implementation with uniform replay buffer
+   - Achieves reasonable performance (137.02) but with moderate variance (±64.49)
+   - Serves as a solid baseline for comparison
+
+2. Prioritized Experience Replay:
+   - Shows the highest mean reward (227.20) in our experiments
+   - High variance (±132.68) indicates some seeds benefit greatly while others don't
+   - Stratified sampling ensures good coverage across the priority distribution
+   - Importance sampling correction helps maintain unbiased updates
+   - The high performance suggests that focusing on high-TD-error transitions
+     leads to faster learning in CartPole-v1
+
+3. Double DQN:
+   - Shows more stable learning with the lowest variance (±39.07)
+   - Mean reward of 174.32 is better than base DQN
+   - The decoupling of action selection and evaluation reduces overestimation bias
+   - This is consistent with the paper's claims about reducing bias
+   - Particularly effective in environments where overestimation is problematic
+
+4. Combined (Prioritized + Double DQN):
+   - Achieves the best mean performance (234.64)
+   - High variance (±136.99) suggests the combination amplifies both the benefits
+     and the sensitivity to random initialization
+   - Combines the fast learning from prioritization with the stable learning
+     from double Q-learning

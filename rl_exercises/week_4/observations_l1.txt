@@ -1,0 +1,17 @@
+with this bash script start multirun with different parameters
+
+
+python dqn.py --multirun agent.batch_size=8,32,128
+python dqn.py --multirun agent.buffer_capacity=500,1000,10000
+python dqn.py --multirun agent.hidden_dim=32,64,128
+
+
+Batch size: The larger the batch sizes are, we get a smoother reward curve and the mean reward gets higher faster.
+
+Buffer size: You can see for the buffer size 500 that the mean reward crashes around 9000 frames. This is because the buffer size is too small and is forgets periodically how to handle old states as it learns new ones.
+
+Architecture: The bigger the hidden dimension the faster the mean reward grows. But when the dimension is too high, it will probably grow slower again, because this environment is a simple problem and it will have too many parameters to opimize for such a simple task
+
+
+
+
