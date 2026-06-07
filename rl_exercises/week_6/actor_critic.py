@@ -6,6 +6,9 @@ Adds GAE for low-variance advantage estimation.
 
 from typing import Any, List, Tuple
 
+import os
+import pickle
+
 import gymnasium as gym
 import hydra
 import numpy as np
@@ -46,6 +49,7 @@ class ActorCriticAgent(AbstractAgent):
     ) -> None:
         set_seed(env, seed)
         self.env = env
+        self.seed = seed
         self.gamma = gamma
         self.gae_lambda = gae_lambda
         self.baseline_type = baseline_type
@@ -231,6 +235,12 @@ class ActorCriticAgent(AbstractAgent):
     ) -> None:
         eval_env = gym.make(self.env.spec.id)
         step_count = 0
+        eval_results = {"steps": [], "returns": []}
+
+        os.makedirs(
+            os.path.join(hydra.utils.get_original_cwd(), "results", "actor_critic"),
+            exist_ok=True,
+        )
 
         while step_count < total_steps:
             state, _ = self.env.reset()
@@ -249,6 +259,8 @@ class ActorCriticAgent(AbstractAgent):
 
                 if step_count % eval_interval == 0:
                     mean_r, std_r = self.evaluate(eval_env, num_episodes=eval_episodes)
+                    eval_results["steps"].append(step_count)
+                    eval_results["returns"].append(mean_r)
                     print(
                         f"[Eval ] Step {step_count:6d} AvgReturn {mean_r:5.1f} ± {std_r:4.1f}"
                     )
@@ -259,6 +271,15 @@ class ActorCriticAgent(AbstractAgent):
                 f"[Train] Step {step_count:6d} Return {total_return:5.1f} Policy Loss {policy_loss:.3f} Value Loss {value_loss:.3f}"
             )
 
+        pickle_path = os.path.join(
+            hydra.utils.get_original_cwd(),
+            "results",
+            "actor_critic",
+            f"{self.env.spec.id}_{self.baseline_type}_seed{self.seed}.pkl",
+        )
+        with open(pickle_path, "wb") as f:
+            pickle.dump(eval_results, f)
+        print(f"Results saved to {pickle_path}")
         print("Training complete.")
 
 
