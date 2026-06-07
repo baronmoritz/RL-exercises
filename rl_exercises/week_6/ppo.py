@@ -3,9 +3,9 @@
 On-policy Proximal Policy Optimization (PPO) with GAE, clipped surrogate objective,
 value-loss coefficient, and entropy bonus, trained for a total number of environment steps.
 
-Implemented enhancement for task 2:
+Implemented enhancements for task 2:
    - KL divergence early stopping as described in the blog post: https://github.com/openai/spinningup/blob/038665d62d569055401d91856abb287263096178/spinup/algos/pytorch/ppo/ppo.py#L269-L271
-   -
+   - Adam Learning Rate Annealing as described in the blog post: https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/ppo2/ppo2.py#L133-L135
 """
 
 from typing import Any, List, Tuple
@@ -61,6 +61,7 @@ class PPOAgent(AbstractAgent):
         hidden_size: int = 128,
         kl_early_stopping_threshold: float = 0.01,
         enable_kl_early_stopping: bool = True,
+        enable_lr_annealing: bool = True,
     ) -> None:
         set_seed(env, seed)
         self.seed = seed
@@ -74,6 +75,9 @@ class PPOAgent(AbstractAgent):
         self.vf_coef = vf_coef
         self.kl_early_stopping_threshold = kl_early_stopping_threshold
         self.enable_kl_early_stopping = enable_kl_early_stopping
+        self.enable_lr_annealing = enable_lr_annealing
+        self.lr_actor_initial = lr_actor
+        self.lr_critic_initial = lr_critic
 
         # networks
         self.policy = Policy(env.observation_space, env.action_space, hidden_size)
@@ -245,6 +249,21 @@ class PPOAgent(AbstractAgent):
                         f"[Eval ] Step {step_count:6d} AvgReturn {mean_r:5.1f} ± {std_r:4.1f}"
                     )
 
+            # Enhancement 2: Adam Learning Rate Annealing
+            # Linearly decay learning rate from initial value to 0 over total_steps.
+            # Justification: Helps fine-tune the policy as training progresses and improves
+            # final performance by reducing step sizes near convergence.
+            # Reference: https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/ppo2/ppo2.py#L133-L135
+            if self.enable_lr_annealing:
+                progress = step_count / total_steps
+                current_lr_actor = self.lr_actor_initial * (1 - progress)
+                current_lr_critic = self.lr_critic_initial * (1 - progress)
+                for param_group in self.optimizer.param_groups:
+                    if "policy" in str(param_group["params"]):
+                        param_group["lr"] = current_lr_actor
+                    else:
+                        param_group["lr"] = current_lr_critic
+
             # PPO update
             policy_loss, value_loss, entropy_loss = self.update(trajectory)
             total_return = sum(t[4] for t in trajectory)
@@ -288,6 +307,9 @@ def main(cfg: DictConfig) -> None:
         vf_coef=cfg.agent.vf_coef,
         seed=cfg.seed,
         hidden_size=cfg.agent.hidden_size,
+        kl_early_stopping_threshold=cfg.agent.get("kl_early_stopping_threshold", 0.01),
+        enable_kl_early_stopping=cfg.agent.get("enable_kl_early_stopping", True),
+        enable_lr_annealing=cfg.agent.get("enable_lr_annealing", True),
     )
     agent.train(
         cfg.train.total_steps,
