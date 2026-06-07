@@ -1,0 +1,44 @@
+Week 6 Level 3: SAC vs. PPO
+
+--- Environment: LunarLander-v3 (Discrete) vs. LunarLanderContinuous-v3 (Continuous) ---
+Total steps: 200000
+Baselines / Variants tested: SAC (Continuous), PPO Vanilla (Discrete), PPO Enhanced (Discrete)
+Number of runs per baseline: 1 (seed: 0) used for direct comparison due to computational constraints
+Evaluation interval: 10000 steps
+
+Note on Methodology:
+In this comparison, the PPO baselines were trained on the discrete version of the LunarLander environment, while SAC was trained on the continuous version.
+SAC inherently requires a continuous action space (using the reparameterization trick on a Gaussian distribution), whereas our PPO implementation was designed for discrete spaces.
+Adapting PPO for continuous spaces would have required significant architectural changes that could invalidate earlier test results.
+Therefore, we compare discrete PPO with continuous SAC.
+While not a perfectly symmetric comparison, the continuous action space is mathematically infinitely larger and generally harder to solve.
+Consequently, if SAC performs well here, it only strengthens the claims regarding its efficiency.
+
+Results:
+- SAC:
+    Starts with moderate performance around 0. It exhibits a significant early spike, reaching approximately +180 at 20,000 steps, followed by a sharp decline
+    to around -200 at 50,000 steps. After this drop, SAC stabilizes at a low return between 0 and +20 for the remainder of the training, ending at around -20.
+- PPO Vanilla:
+    Starts at around -250 and improves steadily and linearly, reaching a final evaluation return of approximately +120 at 200,000 steps.
+- PPO Enhanced:
+    Starts at around -300, shows a rapid initial improvement, and stabilizes at around +100 to +120 for the second half of training, ending at approximately +120.
+Observations (Verifying the SAC Paper Claims):
+- Sample Efficiency:
+    The paper claims that SAC, as an off-policy method, is highly sample efficient compared to on-policy methods.
+    However, in this experiment, SAC does not demonstrate superior sample efficiency.
+    It shows unstable learning behavior, with a temporary spike in performance at 20,000 steps, but fails to maintain high returns.
+    Both PPO variants, while slower to start, consistently improve and ultimately surpass SAC in final performance.
+    PPO Vanilla and Enhanced reach returns of ~120 at 200,000 steps, whereas SAC stabilizes at a much lower return of ~0 to +20.
+- Exploration and Maximum Entropy:
+    The paper states that the maximum entropy objective incentivizes the policy to "explore more widely, while giving up on clearly unpromising avenues."
+    SAC's learning curve reflects this to some extent: the early spike to +180 suggests aggressive exploration, possibly due to high entropy.
+    However, the subsequent sharp decline to -200 indicates that SAC struggles to maintain stability in this environment.
+    This instability contrasts with the paper's claims of robust exploration. PPO, on the other hand, shows a more conservative but steady improvement,
+    suggesting a greedier, more stable exploration strategy.
+- Final Performance:
+    In this experimental setup, SAC did not outperform PPO. However, because the algorithms were evaluated on different action-space formulations of the task,
+    the result should not be interpreted as a direct contradiction of the SAC paper.
+- Stability:
+    The paper highlights that SAC is very stable. However, in this single-seed experiment, SAC exhibits significant instability, with a dramatic
+    spike and subsequent crash in performance. After 50,000 steps, SAC stabilizes but at a low return level. In contrast, both PPO variants show
+    remarkable stability and consistent improvement throughout training, without catastrophic drops or high variance.
