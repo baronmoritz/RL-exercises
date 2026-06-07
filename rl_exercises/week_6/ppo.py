@@ -135,7 +135,9 @@ class PPOAgent(AbstractAgent):
         returns = advantages + values.squeeze()
 
         # Normalize advantages
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        advantages = (advantages - advantages.mean()) / (
+            advantages.std(unbiased=False) + 1e-8
+        )
 
         return advantages.detach(), returns.detach()
 
