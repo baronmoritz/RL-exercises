@@ -78,6 +78,8 @@ class PPOAgent(AbstractAgent):
         self.enable_lr_annealing = enable_lr_annealing
         self.lr_actor_initial = lr_actor
         self.lr_critic_initial = lr_critic
+        self.returns = {}
+        self.steps = []
 
         # networks
         self.policy = Policy(env.observation_space, env.action_space, hidden_size)
@@ -247,6 +249,8 @@ class PPOAgent(AbstractAgent):
 
                 if step_count % eval_interval == 0:
                     mean_r, std_r = self.evaluate(eval_env, num_episodes=eval_episodes)
+                    self.returns[step_count] = mean_r
+                    self.steps.append(step_count)
                     print(
                         f"[Eval ] Step {step_count:6d} AvgReturn {mean_r:5.1f} ± {std_r:4.1f}"
                     )
