@@ -2,6 +2,10 @@
 """
 On-policy Proximal Policy Optimization (PPO) with GAE, clipped surrogate objective,
 value-loss coefficient, and entropy bonus, trained for a total number of environment steps.
+
+Implemented enhancement for task 2:
+   - KL divergence early stopping as described in the blog post: https://github.com/openai/spinningup/blob/038665d62d569055401d91856abb287263096178/spinup/algos/pytorch/ppo/ppo.py#L269-L271
+   -
 """
 
 from typing import Any, List, Tuple
@@ -55,6 +59,8 @@ class PPOAgent(AbstractAgent):
         vf_coef: float = 0.5,
         seed: int = 0,
         hidden_size: int = 128,
+        kl_early_stopping_threshold: float = 0.01,
+        enable_kl_early_stopping: bool = True,
     ) -> None:
         set_seed(env, seed)
         self.seed = seed
@@ -66,6 +72,8 @@ class PPOAgent(AbstractAgent):
         self.batch_size = batch_size
         self.ent_coef = ent_coef
         self.vf_coef = vf_coef
+        self.kl_early_stopping_threshold = kl_early_stopping_threshold
+        self.enable_kl_early_stopping = enable_kl_early_stopping
 
         # networks
         self.policy = Policy(env.observation_space, env.action_space, hidden_size)
@@ -163,6 +171,22 @@ class PPOAgent(AbstractAgent):
                 # TODO: compute new log probabilities by sampling actions from the policy distribution
                 dist = Categorical(self.policy(b_states))
                 new_logp = dist.log_prob(b_actions)
+
+                # Enhancement 1: KL divergence early stopping
+                # Early stopping based on approximate KL divergence between old and new policy.
+                # Justification: Prevents excessively large policy updates that could destabilize learning.
+                # Large KL divergence indicates the new policy is too far from the old one, which may
+                # lead to performance collapse. Early stopping improves training stability.
+                # Reference: https://github.com/openai/spinningup/blob/038665d62d569055401d91856abb287263096178/spinup/algos/pytorch/ppo/ppo.py#L269-L271
+                if self.enable_kl_early_stopping:
+                    approx_kl = (
+                        b_oldlogp - new_logp
+                    ).mean()  # Approximate KL divergence
+                    if approx_kl > self.kl_early_stopping_threshold:
+                        print(
+                            f"[KL Early Stopping] KL={approx_kl:.4f} > target={self.kl_early_stopping_threshold:.4f}"
+                        )
+                        break
 
                 # TODO: compute the ratio of new log probabilities to old log probabilities
                 ratio = torch.exp(new_logp - b_oldlogp)
