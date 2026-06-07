@@ -2,7 +2,7 @@ Week 6 Level 2: Extending PPO
 
 --- Environment: LunarLander-v3 ---
 Total steps: 200000
-Baselines / Variants tested: PPO Vanilla, Ppo Enhanced, GAE
+Baselines / Variants tested: PPO Vanilla, PPO Enhanced, GAE
 Number of runs per baseline: 3 (seeds: 0, 142312, 892735897)
 Evaluation interval: 10000 steps
 
