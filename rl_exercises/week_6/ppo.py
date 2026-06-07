@@ -101,7 +101,31 @@ class PPOAgent(AbstractAgent):
         dones: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # TODO: compute advantages using GAE (Hint: replicate the GAE formula from actor critic)
-        return None  # template placeholder
+        # Compute deltas: one-step TD errors
+        deltas = []
+        for t in range(len(rewards)):
+            done = dones[t]
+            delta = rewards[t] + self.gamma * next_values[t] * (1 - done) - values[t]
+            deltas.append(delta)
+        deltas = torch.stack(deltas)
+
+        # Accumulate GAE advantages backwards
+        advantages = torch.zeros_like(deltas)
+        last_advantage = torch.tensor(0.0)
+        for t in reversed(range(len(rewards))):
+            done = dones[t]
+            advantages[t] = (
+                deltas[t] + self.gamma * self.gae_lambda * (1 - done) * last_advantage
+            )
+            last_advantage = advantages[t]
+
+        # Compute returns using advantages and values
+        returns = advantages + values.squeeze()
+
+        # Normalize advantages
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+        return advantages.detach(), returns.detach()
 
     def update(self, trajectory: List[Any]) -> None:
         # unpack trajectory
@@ -113,12 +137,15 @@ class PPOAgent(AbstractAgent):
         dones = torch.tensor([t[5] for t in trajectory], dtype=torch.float32)
 
         # TODO: compute values and next_values without gradients
-        values = ...  # noqa: F841  # template placeholder
-        next_values = ...  # noqa: F841  # template placeholder
+        with torch.no_grad():
+            values = self.value_fn(states).squeeze()
+            next_values = self.value_fn(
+                torch.stack([torch.from_numpy(t[6]).float() for t in trajectory])
+            ).squeeze()
 
         # TODO: compute advantages and returns
-        advantages = ...  # template placeholder
-        returns = ...  # template placeholder
+        advantages = None  # template placeholder
+        returns = None  # template placeholder
 
         advantages, returns = self.compute_gae(rewards, values, next_values, dones)
 
@@ -134,18 +161,25 @@ class PPOAgent(AbstractAgent):
                 # TODO: compute policy loss, value loss, and entropy loss
 
                 # TODO: compute new log probabilities by sampling actions from the policy distribution
-                new_logp = ...  # noqa: F841  # template placeholder
+                dist = Categorical(self.policy(b_states))
+                new_logp = dist.log_prob(b_actions)
 
                 # TODO: compute the ratio of new log probabilities to old log probabilities
+                ratio = torch.exp(new_logp - b_oldlogp)
 
                 # TODO: compute the clipped surrogate loss using the clipped objective
-                policy_loss = ...  # template placeholder
+                surrogate1 = ratio * b_adv
+                surrogate2 = (
+                    torch.clamp(ratio, 1.0 - self.clip_eps, 1.0 + self.clip_eps) * b_adv
+                )
+                policy_loss = -torch.min(surrogate1, surrogate2).mean()
 
                 # TODO: compute value loss using mean squared error
-                value_loss = ...  # template placeholder
+                values = self.value_fn(b_states).squeeze()
+                value_loss = torch.nn.functional.mse_loss(values, b_ret)
 
                 # TODO: compute entropy loss using the distribution's entropy
-                entropy_loss = ...  # template placeholder
+                entropy_loss = -dist.entropy().mean()
 
                 loss = (
                     policy_loss
