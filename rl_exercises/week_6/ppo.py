@@ -2,6 +2,10 @@
 """
 On-policy Proximal Policy Optimization (PPO) with GAE, clipped surrogate objective,
 value-loss coefficient, and entropy bonus, trained for a total number of environment steps.
+
+Implemented enhancements for task 2:
+   - KL divergence early stopping as described in the blog post: https://github.com/openai/spinningup/blob/038665d62d569055401d91856abb287263096178/spinup/algos/pytorch/ppo/ppo.py#L269-L271
+   - Adam Learning Rate Annealing as described in the blog post: https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/ppo2/ppo2.py#L133-L135
 """
 
 from typing import Any, List, Tuple
@@ -55,6 +59,9 @@ class PPOAgent(AbstractAgent):
         vf_coef: float = 0.5,
         seed: int = 0,
         hidden_size: int = 128,
+        kl_early_stopping_threshold: float = 0.01,
+        enable_kl_early_stopping: bool = True,
+        enable_lr_annealing: bool = True,
     ) -> None:
         set_seed(env, seed)
         self.seed = seed
@@ -66,6 +73,13 @@ class PPOAgent(AbstractAgent):
         self.batch_size = batch_size
         self.ent_coef = ent_coef
         self.vf_coef = vf_coef
+        self.kl_early_stopping_threshold = kl_early_stopping_threshold
+        self.enable_kl_early_stopping = enable_kl_early_stopping
+        self.enable_lr_annealing = enable_lr_annealing
+        self.lr_actor_initial = lr_actor
+        self.lr_critic_initial = lr_critic
+        self.returns = {}
+        self.steps = []
 
         # networks
         self.policy = Policy(env.observation_space, env.action_space, hidden_size)
@@ -101,7 +115,33 @@ class PPOAgent(AbstractAgent):
         dones: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         # TODO: compute advantages using GAE (Hint: replicate the GAE formula from actor critic)
-        return None  # template placeholder
+        # Compute deltas: one-step TD errors
+        deltas = []
+        for t in range(len(rewards)):
+            done = dones[t]
+            delta = rewards[t] + self.gamma * next_values[t] * (1 - done) - values[t]
+            deltas.append(delta)
+        deltas = torch.stack(deltas)
+
+        # Accumulate GAE advantages backwards
+        advantages = torch.zeros_like(deltas)
+        last_advantage = torch.tensor(0.0)
+        for t in reversed(range(len(rewards))):
+            done = dones[t]
+            advantages[t] = (
+                deltas[t] + self.gamma * self.gae_lambda * (1 - done) * last_advantage
+            )
+            last_advantage = advantages[t]
+
+        # Compute returns using advantages and values
+        returns = advantages + values.squeeze()
+
+        # Normalize advantages
+        advantages = (advantages - advantages.mean()) / (
+            advantages.std(unbiased=False) + 1e-8
+        )
+
+        return advantages.detach(), returns.detach()
 
     def update(self, trajectory: List[Any]) -> None:
         # unpack trajectory
@@ -113,12 +153,15 @@ class PPOAgent(AbstractAgent):
         dones = torch.tensor([t[5] for t in trajectory], dtype=torch.float32)
 
         # TODO: compute values and next_values without gradients
-        values = ...  # noqa: F841  # template placeholder
-        next_values = ...  # noqa: F841  # template placeholder
+        with torch.no_grad():
+            values = self.value_fn(states).squeeze()
+            next_values = self.value_fn(
+                torch.stack([torch.from_numpy(t[6]).float() for t in trajectory])
+            ).squeeze()
 
         # TODO: compute advantages and returns
-        advantages = ...  # template placeholder
-        returns = ...  # template placeholder
+        advantages = None  # template placeholder
+        returns = None  # template placeholder
 
         advantages, returns = self.compute_gae(rewards, values, next_values, dones)
 
@@ -134,18 +177,41 @@ class PPOAgent(AbstractAgent):
                 # TODO: compute policy loss, value loss, and entropy loss
 
                 # TODO: compute new log probabilities by sampling actions from the policy distribution
-                new_logp = ...  # noqa: F841  # template placeholder
+                dist = Categorical(self.policy(b_states))
+                new_logp = dist.log_prob(b_actions)
+
+                # Enhancement 1: KL divergence early stopping
+                # Early stopping based on approximate KL divergence between old and new policy.
+                # Justification: Prevents excessively large policy updates that could destabilize learning.
+                # Large KL divergence indicates the new policy is too far from the old one, which may
+                # lead to performance collapse. Early stopping improves training stability.
+                # Reference: https://github.com/openai/spinningup/blob/038665d62d569055401d91856abb287263096178/spinup/algos/pytorch/ppo/ppo.py#L269-L271
+                if self.enable_kl_early_stopping:
+                    approx_kl = (
+                        b_oldlogp - new_logp
+                    ).mean()  # Approximate KL divergence
+                    if approx_kl > self.kl_early_stopping_threshold:
+                        print(
+                            f"[KL Early Stopping] KL={approx_kl:.4f} > target={self.kl_early_stopping_threshold:.4f}"
+                        )
+                        break
 
                 # TODO: compute the ratio of new log probabilities to old log probabilities
+                ratio = torch.exp(new_logp - b_oldlogp)
 
                 # TODO: compute the clipped surrogate loss using the clipped objective
-                policy_loss = ...  # template placeholder
+                surrogate1 = ratio * b_adv
+                surrogate2 = (
+                    torch.clamp(ratio, 1.0 - self.clip_eps, 1.0 + self.clip_eps) * b_adv
+                )
+                policy_loss = -torch.min(surrogate1, surrogate2).mean()
 
                 # TODO: compute value loss using mean squared error
-                value_loss = ...  # template placeholder
+                values = self.value_fn(b_states).squeeze()
+                value_loss = torch.nn.functional.mse_loss(values, b_ret)
 
                 # TODO: compute entropy loss using the distribution's entropy
-                entropy_loss = ...  # template placeholder
+                entropy_loss = -dist.entropy().mean()
 
                 loss = (
                     policy_loss
@@ -183,9 +249,26 @@ class PPOAgent(AbstractAgent):
 
                 if step_count % eval_interval == 0:
                     mean_r, std_r = self.evaluate(eval_env, num_episodes=eval_episodes)
+                    self.returns[step_count] = mean_r
+                    self.steps.append(step_count)
                     print(
                         f"[Eval ] Step {step_count:6d} AvgReturn {mean_r:5.1f} ± {std_r:4.1f}"
                     )
+
+            # Enhancement 2: Adam Learning Rate Annealing
+            # Linearly decay learning rate from initial value to 0 over total_steps.
+            # Justification: Helps fine-tune the policy as training progresses and improves
+            # final performance by reducing step sizes near convergence.
+            # Reference: https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/ppo2/ppo2.py#L133-L135
+            if self.enable_lr_annealing:
+                progress = step_count / total_steps
+                current_lr_actor = self.lr_actor_initial * (1 - progress)
+                current_lr_critic = self.lr_critic_initial * (1 - progress)
+                for param_group in self.optimizer.param_groups:
+                    if "policy" in str(param_group["params"]):
+                        param_group["lr"] = current_lr_actor
+                    else:
+                        param_group["lr"] = current_lr_critic
 
             # PPO update
             policy_loss, value_loss, entropy_loss = self.update(trajectory)
@@ -230,6 +313,9 @@ def main(cfg: DictConfig) -> None:
         vf_coef=cfg.agent.vf_coef,
         seed=cfg.seed,
         hidden_size=cfg.agent.hidden_size,
+        kl_early_stopping_threshold=cfg.agent.get("kl_early_stopping_threshold", 0.01),
+        enable_kl_early_stopping=cfg.agent.get("enable_kl_early_stopping", True),
+        enable_lr_annealing=cfg.agent.get("enable_lr_annealing", True),
     )
     agent.train(
         cfg.train.total_steps,

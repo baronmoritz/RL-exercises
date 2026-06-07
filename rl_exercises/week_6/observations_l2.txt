@@ -1,0 +1,19 @@
+Week 6 Level 2: Extending PPO
+
+--- Environment: LunarLander-v3 ---
+Total steps: 200000
+Baselines / Variants tested: PPO Vanilla, PPO Enhanced, GAE
+Number of runs per baseline: 3 (seeds: 0, 142312, 892735897)
+Evaluation interval: 10000 steps
+
+Results:
+- PPO Vanilla: Starts at around -275, improves steadily, and reaches the highest final IQM evaluation return of approximately +75.
+- PPO Enhanced: Starts around -200, shows a very stable and consistent learning curve, and plateaus at around 0 return for the second half of training.
+- GAE: Starts low at -750, exhibits massive performance drops down to -875 and -650, but climbs up to around -200 by the end of training.
+
+Observations:
+- Both PPO variants significantly outperform the Actor-Critic baseline (GAE) in final performance, learning speed, and stability.
+- PPO Vanilla achieves the highest overall peak performance by the end of training, though it shows slightly higher variance in the final phases compared to PPO Enhanced.
+- PPO Enhanced shows remarkably low variance (narrow uncertainty band) and very smooth improvement. One performance drop at the middle of the run leads to it performing worse than the vanilla version in the end.
+- The GAE baseline from Level 1 remains highly unstable, showing huge variance and deep performance collapses, failing to reach positive returns within the 200000 steps.
+

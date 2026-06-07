@@ -1,0 +1,55 @@
+Week 6 Level 1: Actor-Critic Baselines Comparison
+
+--- Environment: CartPole-v1 ---
+Total steps: 200000
+Baselines tested: none, avg, value, gae
+Number of runs per baseline: 3 (seeds: 0, 142312, 892735897)
+Evaluation interval: 10000 steps
+
+Results:
+- none: Reaches a return of ~500. It reaches it after around 60000 steps for the first time.
+- avg: Reaches a return of ~330 in the end. However, before that it also hits 500.
+- value: Reaches a return of ~500 early and almost keeps it all the time until the end.
+- gae: Reaches a return of ~500 in the end and before that it also keeps close to 500 for the most of the time.
+
+Observations:
+- All baselines are able to solve CartPole-v1 eventually.
+- The value baseline reaches the optimal return most consistently and shows the smallest variance between runs.
+- GAE also performs very well and remains close to the maximum return for most evaluations.
+- The average-return baseline learns quickly but is less stable and collapses in one run near the end of training.
+- The version without a baseline is surprisingly competitive but exhibits larger fluctuations during training.
+
+Conceptual Justification:
+- A baseline reduces the variance of the policy gradient estimate without introducing bias.
+- The value baseline provides a state-dependent estimate of the expected return and therefore gives the most informative advantage estimates.
+- GAE further smooths the advantage estimates by combining multi-step returns, leading to lower variance while keeping the bias relatively small.
+- The average-return baseline only subtracts a global mean return and therefore cannot account for differences between individual states.
+- Since CartPole is a relatively simple environment with dense rewards, all methods are able to learn a near-optimal policy, but the stronger baselines improve stability and sample efficiency.
+
+--- Environment: LunarLander-v3 ---
+Total steps: 200000
+Baselines tested: none, avg, value, gae
+Number of runs per baseline: 3 (seeds: 0, 142312, 892735897)
+Evaluation interval: 10000 steps
+
+Results:
+- none: Improves from roughly -600 to around -80 average return by the end of training.
+- avg: Learns steadily and achieves the best final performance with an average return slightly above 0.
+- value: Starts with the lowest returns but improves continuously and finishes close to -100.
+- gae: Shows the slowest and most unstable learning process but improves from around -750 to approximately -200.
+
+Observations:
+- LunarLander-v3 is considerably harder than CartPole-v1 and none of the methods fully converges within 200000 environment steps.
+- All baselines improve substantially over the course of training.
+- The average-return baseline achieves the strongest final performance and is the only method that reaches positive average returns.
+- The value baseline learns more slowly than expected and exhibits high variance during the early stages of training.
+- GAE shows large fluctuations between runs and does not outperform the simpler baselines in this experiment.
+- The no-baseline variant remains competitive throughout training and often performs similarly to the value baseline.
+
+Conceptual Justification:
+- LunarLander requires longer credit assignment and more precise control than CartPole, making the learning problem significantly harder.
+- In principle, value-based baselines and GAE should reduce gradient variance and improve learning stability.
+- However, these methods depend on the quality of the learned value function. If the critic is inaccurate, the resulting advantage estimates can be noisy and negatively affect policy updates.
+- The average-return baseline is simpler and less dependent on critic accuracy, which may explain its strong empirical performance in this experiment.
+- The large variance observed for GAE suggests that the chosen hyperparameters or critic learning dynamics may not be optimal for this environment.
+- Additional training steps, hyperparameter tuning, or a larger network architecture could potentially reveal stronger advantages of value-based baselines and GAE.
