@@ -1,0 +1,18 @@
+env:
+  name: LunarLanderContinuous-v3
+
+seed: 0
+
+agent:
+  lr: 3e-4
+  gamma: 0.99
+  tau: 0.005
+  alpha: 0.2
+  hidden_size: 128
+  buffer_size: 1000000
+  batch_size: 256
+
+train:
+  total_steps: 200000
+  eval_interval: 10000
+  eval_episodes: 5
