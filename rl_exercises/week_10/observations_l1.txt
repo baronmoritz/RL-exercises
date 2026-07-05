@@ -1,0 +1,43 @@
+LEVEL 1: HOW WELL DOES HPO GENERALIZE IN RL?
+
+To run the experiment, we execute
+`python rl_exercises/week_10/l1_hpo_generalization.py` (inside the .venv).
+
+Generalization task
+-------------------
+We generalize across seeds. The environment (a stochastic MarsRover with an
+80% action-success probability) and the algorithm (tabular Q-Learning) are
+fixed -> only the random seed changes. The seed controls the environment
+stochasticity, the exploration and the training trajectory. We optimize the
+three hyperparameters (alpha, epsilon, gamma) with Optuna (TPE, 60 trials) on
+five TRAINING seeds [0, 1, 2, 3, 4] and then evaluate the very same
+configurations on five disjoint HELD-OUT TEST seeds [10, 11, 12, 13, 14].
+
+Expectation
+-----------
+Since only the seed changes (the underlying MDP stays the same), we expected a
+small generalization gap and a high rank correlation between train and test
+scores: the configuration that HPO selects on the training seeds should still
+be one of the best on the unseen test seeds.
+
+Results (Source data: l1_trials.csv, Visualization: l1_train_vs_test.pdf)
+-------------------------------------------------------------------------
+Best configuration on the training seeds:
+    alpha = 0.1989, epsilon = 0.1105, gamma = 0.9494
+
+    Train-seed score : 61.55
+    Test-seed  score : 60.26
+    Generalization gap : 1.29
+
+    Spearman rank correlation (train vs test over all 60 trials): 0.814
+
+Do they match our expectations?
+-------------------------------
+Yes. The incumbent loses only ~1.3 return (about 2%) when moved to unseen
+seeds and the rank correlation of 0.81 confirms that the ranking HPO optimizes
+on the training seeds transfers well to the test seeds. In other words, for a
+pure across-seed generalization setting HPO configurations generalize well:
+Tuning on a handful of seeds is enough to find a configuration that is also
+strong on new seeds. The scatter plot shows the trials lying close to the
+train = test diagonal, with only the very unstable (high-alpha) configurations
+scattering more, because their return depends more strongly on the seed.
