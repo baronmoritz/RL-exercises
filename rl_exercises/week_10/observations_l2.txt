@@ -1,0 +1,73 @@
+LEVEL 2: MULTI-FIDELITY IN RL -- WHEN ARE EARLY SCORES DECEIVING?
+
+To run the experiment, we execute
+`python rl_exercises/week_10/l2_multifidelity.py` (inside the .venv).
+
+Designed setting and why early scores can deceive
+-------------------------------------------------
+We tune tabular Q-Learning (alpha, epsilon, gamma) on the stochastic MarsRover,
+with a search space that allows very large learning rates (alpha up to 1.0).
+A large alpha bootstraps the Q-values towards a good policy extremely fast, so
+after only a few hundred steps such a configuration often already has a great
+evaluation return. But a large learning rate keeps overreacting to the
+environment stochasticity, so with more training the Q-values oscillate and the
+return collapses. Fidelity = number of training steps -> the low-fidelity score
+(500 steps) is thus a poor predictor of the high-fidelity score (8000 steps).
+
+Part A: low- vs high-fidelity correlation
+-----------------------------------------
+Source data: l2_fidelity_scores.csv, Visualization: l2_low_vs_high.pdf
+(60 random configs, scores averaged over seeds 0/1/2.)
+
+    Spearman(low-fidelity 500 steps, high-fidelity 8000 steps) = 0.454
+
+The correlation is weak, i.e. the early ranking only loosely matches the final
+ranking. Concretely:
+
+| Selected by            | Config | Score @500 | Final @8000 |
+|------------------------|--------|------------|-------------|
+| best low-fidelity      | #21    | 61.39      | 46.49       |
+| best high-fidelity     | #7     | 57.68      | 61.81       |
+
+Config #21 is the most attractive after 500 steps but loses a quarter of its
+performance by 8000 steps; the truly best config #7 is only mid-table early.
+An aggressive "keep whatever looks best early" strategy would pick #21 and end
+up 15.32 return (25%) below the real optimum. Five of the top-5 low-fidelity
+configs drop out of the top-5 at high fidelity ("deceptive"), and five of the
+top-5 high-fidelity configs would have been pruned early ("overlooked").
+
+Part B: does a real multi-fidelity optimizer get misled?
+--------------------------------------------------------
+We ran Optuna's SuccessiveHalvingPruner (TPE sampler, 40 trials, fidelities
+500/1000/2000/4000/8000 steps) and inspected its optimization history.
+
+| Metric                                   | Value  |
+|------------------------------------------|--------|
+| Completed trials                         | 14     |
+| Pruned trials                            | 26     |
+| Best full-fidelity value found           | 62.46  |
+| Pruned trials that were actually good    | 0      |
+
+Observation: SuccessiveHalving did NOT get trapped. Although early scores are
+deceiving (Part A), the pruner still keeps several configurations all the way
+to full budget, and the strong low-alpha configurations happen to be good
+enough early to survive the first rungs. So the pruned study still recovered a
+near-optimal configuration (62.46), and no pruned trial would have beaten it.
+
+Conclusion
+----------
+Good initial performance CAN influence the optimization negatively, but the
+severity depends on how aggressively partial evaluations are trusted:
+
+    - Naive selection purely by the low-fidelity score is badly misled here:
+      it costs 25% of the final return, because the fastest early learners are
+      the unstable high-alpha configurations.
+    - A properly designed multi-fidelity optimizer (successive halving that
+      still promotes several configs to full budget) is far more robust and
+      recovered a top configuration despite the weak early-vs-final
+      correlation.
+
+The pitfall is therefore real, and the practical lesson is to not prune too
+aggressively when the low-fidelity signal is weakly correlated with the final
+objective -- exactly the situation created by high learning rates in a
+stochastic environment.
