@@ -1,0 +1,129 @@
+OBSERVATIONS: REPRODUCTION OF "HYPERPARAMETERS IN CONTEXTUAL RL ARE HIGHLY
+SITUATIONAL" (Eimer et al., 2022, arXiv 2212.10876)
+
+To run the experiment, we execute
+`python rl_exercises/week_10/l3_contextual_hpo.py` (inside the .venv).
+
+This document records the observations of a small-scale reproduction of the
+workshop paper's central claim: that the optimal hyperparameters of an RL
+algorithm depend strongly on the context, so that hyperparameters tuned for one
+context (or averaged over a context distribution) are frequently sub-optimal for
+the others. We use tabular Q-Learning on the ContextualMarsRover, Optuna (TPE,
+30 trials) as the optimizer, and four contexts that span a difficulty gradient:
+
+    C1_easy_right      friction 0.90, goal_pos 4
+    C2_medium_left     friction 0.70, goal_pos 0
+    C3_hard_right      friction 0.50, goal_pos 4
+    C4_veryhard_left   friction 0.35, goal_pos 0
+
+friction controls how often an action is executed as intended (the rest of the
+time it is flipped); goal_pos moves the single rewarding cell. Every context is
+therefore a genuinely different MDP. Each configuration is scored as the mean
+evaluation return over seeds 0/1/2 after 8000 training steps.
+
+
+    EXPERIMENT 1: PER-CONTEXT HYPERPARAMETER OPTIMIZATION
+
+Source data: l3_best_configs.csv
+Visualization: l3_best_hp_per_context.pdf
+
+We tuned (alpha, epsilon, gamma) separately for every context:
+
+    C1_easy_right     : alpha=0.0133, epsilon=0.475, gamma=0.973  -> 77.40
+    C2_medium_left    : alpha=0.0133, epsilon=0.475, gamma=0.973  -> 47.20
+    C3_hard_right     : alpha=0.1331, epsilon=0.010, gamma=0.997  -> 23.00
+    C4_veryhard_left  : alpha=0.0143, epsilon=0.295, gamma=0.926  -> 37.20
+
+The easy and medium contexts (C1, C2) and, to a lesser degree, the very hard
+context (C4) favour heavy exploration (epsilon in [0.30, 0.48]) with a small
+learning rate. The hard context C3 (friction = 0.50) is the clear outlier: its
+optimum uses almost no exploration (epsilon = 0.01) and a ten-fold larger
+learning rate (alpha = 0.13). This already illustrates the paper's thesis --
+the best configuration is not shared across contexts but is situational.
+
+A notable side observation is that difficulty is not monotone in friction:
+C3 (friction 0.50) scores worst (23.0), below the "harder" C4 (friction 0.35,
+37.2). A friction of 0.50 makes each action a fair coin flip, i.e. the agent has
+essentially no control, whereas at friction 0.35 an action is reliably inverted
+and the agent can learn to exploit that inversion. The coin-flip context is thus
+the hardest to control and, consistently, the one that needs a distinct
+low-exploration / high-learning-rate configuration.
+
+
+    EXPERIMENT 2: HYPERPARAMETER TRANSFER MATRIX
+
+Source data: l3_transfer_matrix.csv
+Visualization: l3_transfer_heatmap.pdf
+
+M[i, j] is the return obtained on context j when trained with the hyperparameters
+that were tuned on context i (rows = source of the HPs, columns = evaluated
+context). The diagonal is the per-context optimum from Experiment 1.
+
+                         eval C1   eval C2   eval C3   eval C4
+    HP(C1_easy)          77.40     47.20     19.13     37.13
+    HP(C2_medium)        77.40     47.20     19.13     37.13
+    HP(C3_hard)          66.00     47.20     23.00     26.00
+    HP(C4_veryhard)      77.40     46.87     18.87     37.20
+
+The mean relative return drop when solving a context with a foreign context's
+hyperparameters is 8.1%. The structure is informative:
+
+    - The high-exploration configurations of C1/C2/C4 transfer well among each
+      other but only reach ~19 on C3 (vs. its optimum of 23.0), a 17% loss.
+    - C3's specialised low-exploration configuration is the least transferable:
+      it drops C1 from 77.4 to 66.0 and C4 from 37.2 to 26.0 (ca. -30%), because
+      near-zero exploration is harmful in the contexts that reward coverage.
+
+So no single row dominates the matrix: Whichever context supplies the
+hyperparameters, at least one other context is solved noticeably worse than by
+its own optimum.
+
+
+    EXPERIMENT 3: PER-CONTEXT OPTIMA VS. ONE GLOBAL CONFIGURATION
+
+We additionally tuned a single "global" configuration on all four contexts in
+round-robin (the setting a practitioner uses when tuning on a context
+distribution):
+
+    global config: alpha=0.0268, epsilon=0.405, gamma=0.921
+
+                        per-context tuned    global config
+    C1_easy_right             77.40              77.40
+    C2_medium_left            47.20              47.20
+    C3_hard_right             23.00              15.60      (ca. -32%)
+    C4_veryhard_left          37.20              37.13
+    mean                      46.20              44.33
+
+The global configuration matches the per-context optima on the three
+exploration-friendly contexts, but pays for it on C3, where it loses a third of
+the return. The average is dragged down accordingly. In other words, a single
+configuration cannot serve every context -> it necessarily compromises on the
+context whose optimum is qualitatively different.
+
+
+    SUMMARY
+
+    1. Optimal hyperparameters differ across contexts (Exp. 1) -> The coin-flip
+       context C3 needs low exploration and a high learning rate, the others
+       need the opposite.
+    2. Hyperparameters do not transfer for free (Exp. 2) -> using a foreign
+       context's HPs costs on average 8% and up to ~30% of the return, and no
+       configuration is best everywhere.
+    3. A single global configuration underperforms per-context tuning (Exp. 3),
+       specifically by sacrificing the context with the deviating optimum.
+
+
+    FINAL CONCLUSION
+
+The reproduction confirms the paper's message on this small tabular benchmark:
+Hyperparameters in contextual RL are highly situational. Even in a four-state
+environment whose contexts differ only in friction and goal position, the best
+configuration is context-dependent, transferring hyperparameters between
+contexts degrades performance, and a single distribution-level configuration
+must trade off contexts against each other. The effect is concentrated in the
+context that is qualitatively different (the near-uncontrollable friction = 0.50
+setting), which mirrors the paper's finding that the interaction between context
+and hyperparameters is strongest exactly where the contexts change the nature of
+the task rather than merely its label. While our absolute numbers are specific
+to this environment and optimizer, the qualitative trends match the paper's
+original conclusions.
